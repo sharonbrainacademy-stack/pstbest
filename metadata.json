@@ -1,0 +1,6 @@
+{
+  "name": "PST BEST EGHOSA | Official Ministry Portal",
+  "description": "Personal ministry website and administrative hub for Pastor Eghosa Best IGBINOVIA (PST BEST EGHOSA) — Prophetic Minister, Teacher of the Word, Author, and Founder of Best Eghosa World Outreach.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

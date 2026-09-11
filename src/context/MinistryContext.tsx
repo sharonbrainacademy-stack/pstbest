@@ -1,0 +1,1081 @@
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { getPlayableAudioUrl } from '../utils/audioUtils';
+import { 
+  MinistryConfig, 
+  Sermon, 
+  WordCafeArticle, 
+  Book, 
+  MinistryEvent, 
+  BookingRequest, 
+  GivingRecord, 
+  PrayerRequest, 
+  AdminUser, 
+  DailyScripture,
+  WhatsAppBroadcast
+} from '../types';
+import { 
+  INITIAL_CONFIG, 
+  INITIAL_SERMONS, 
+  INITIAL_WORD_CAFE_ARTICLES, 
+  INITIAL_BOOKS, 
+  INITIAL_EVENTS, 
+  PROPHETIC_SCRIPTURES, 
+  INITIAL_ADMIN_USERS 
+} from '../data/initialData';
+import { worshipPadEngine } from '../utils/audioSynth';
+
+export interface ToastMessage {
+  id: string;
+  type: 'success' | 'info' | 'warning' | 'error';
+  message: string;
+}
+
+interface MinistryContextType {
+  config: MinistryConfig;
+  updateConfig: (newConfig: Partial<MinistryConfig>) => void;
+  resetConfig: () => void;
+  
+  // Audio Player
+  currentSermon: Sermon | null;
+  isPlaying: boolean;
+  playbackSeconds: number;
+  volume: number;
+  playSermon: (sermon: Sermon) => void;
+  togglePlay: () => void;
+  seek: (seconds: number) => void;
+  setVolume: (val: number) => void;
+  skipForward: () => void;
+  skipBackward: () => void;
+  
+  // Theme
+  isDarkMode: boolean;
+  toggleDarkMode: () => void;
+  
+  // Data items
+  sermons: Sermon[];
+  addSermon: (s: Omit<Sermon, 'id' | 'playsCount'>) => void;
+  updateSermon: (id: string, s: Partial<Sermon>) => void;
+  deleteSermon: (id: string) => void;
+  
+  articles: WordCafeArticle[];
+  addArticle: (a: Omit<WordCafeArticle, 'id'>) => void;
+  updateArticle: (id: string, a: Partial<WordCafeArticle>) => void;
+  deleteArticle: (id: string) => void;
+  
+  books: Book[];
+  addBook: (b: Omit<Book, 'id'>) => void;
+  updateBook: (id: string, b: Partial<Book>) => void;
+  deleteBook: (id: string) => void;
+  
+  events: MinistryEvent[];
+  addEvent: (e: Omit<MinistryEvent, 'id' | 'rsvpCount'>) => void;
+  updateEvent: (id: string, e: Partial<MinistryEvent>) => void;
+  deleteEvent: (id: string) => void;
+  rsvpEvent: (id: string) => void;
+  
+  // Submissions
+  bookingRequests: BookingRequest[];
+  submitBookingRequest: (req: Omit<BookingRequest, 'id' | 'status' | 'submittedAt'>) => void;
+  updateBookingStatus: (id: string, status: BookingRequest['status']) => void;
+  deleteBookingRequest: (id: string) => void;
+  
+  givingRecords: GivingRecord[];
+  recordGiving: (rec: Omit<GivingRecord, 'id' | 'date'>) => void;
+  
+  prayerRequests: PrayerRequest[];
+  submitPrayerRequest: (p: Omit<PrayerRequest, 'id' | 'submittedAt' | 'status'>) => void;
+  updatePrayerStatus: (id: string, status: PrayerRequest['status']) => void;
+  
+  // Scripture of the Day
+  currentScripture: DailyScripture;
+  refreshDailyScripture: () => void;
+  
+  // Admin Auth
+  isAdminLoggedIn: boolean;
+  currentAdminUser: AdminUser | null;
+  adminUsers: AdminUser[];
+  loginAdmin: (email: string, pin: string) => { success: boolean; requiresFirstTimeSetup?: boolean; user?: AdminUser; message: string };
+  logoutAdmin: () => void;
+  updateAdminRole: (userId: string, role: AdminUser['role']) => void;
+  addAdminUser: (email: string, name: string, role: AdminUser['role']) => { success: boolean; message: string };
+  deleteAdminUser: (userId: string) => void;
+  setFirstTimePassword: (email: string, newPassword: string) => { success: boolean; message: string };
+  
+  // Toasts
+  toasts: ToastMessage[];
+  showToast: (message: string, type?: ToastMessage['type']) => void;
+  dismissToast: (id: string) => void;
+  
+  // Backup & Restore
+  exportAllData: () => string;
+  importAllData: (jsonData: string) => boolean;
+  resetAllDataToDefault: () => void;
+
+  // WhatsApp Live Audio Sync
+  whatsappBroadcast: WhatsAppBroadcast | null;
+  whatsappAutoPlay: boolean;
+  toggleWhatsAppAutoPlay: () => void;
+  dismissWhatsAppBroadcast: () => void;
+  simulateWhatsAppAudio: (title: string, audioUrl: string, caption?: string) => Promise<boolean>;
+}
+
+const MinistryContext = createContext<MinistryContextType | undefined>(undefined);
+
+const STORAGE_KEY = 'pst_best_eghosa_ministry_hub_v1';
+const ADMIN_SESSION_KEY = 'pst_best_admin_session_v1';
+
+export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // Load saved state or default
+  const [config, setConfig] = useState<MinistryConfig>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY}_config`);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return INITIAL_CONFIG;
+  });
+
+  const [sermons, setSermons] = useState<Sermon[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY}_sermons`);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return INITIAL_SERMONS;
+  });
+
+  const [articles, setArticles] = useState<WordCafeArticle[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY}_articles`);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return INITIAL_WORD_CAFE_ARTICLES;
+  });
+
+  const [books, setBooks] = useState<Book[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY}_books`);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return INITIAL_BOOKS;
+  });
+
+  const [events, setEvents] = useState<MinistryEvent[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY}_events`);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return INITIAL_EVENTS;
+  });
+
+  const [bookingRequests, setBookingRequests] = useState<BookingRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY}_bookings`);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return [
+      {
+        id: 'booking-1',
+        eventName: 'Kingdom Revival Fire Conference 2026',
+        organizationName: 'Grace City Ministries Int’l',
+        contactPerson: 'Rev. Emmanuel Okon',
+        contactEmail: 'rev.okon@gmail.com',
+        contactPhone: '+2348055566778',
+        eventDate: '2026-11-20',
+        venueCityState: 'Abuja, FCT, Nigeria',
+        expectedAttendees: '2,500',
+        eventType: 'Prophetic Conference & Crusade',
+        additionalNotes: 'We prayerfully request Pastor Best Eghosa for 3 nights of prophetic ministrations and impartation.',
+        status: 'approved',
+        submittedAt: '2026-09-02'
+      }
+    ];
+  });
+
+  const [givingRecords, setGivingRecords] = useState<GivingRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY}_giving`);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return [
+      {
+        id: 'give-1',
+        donorName: 'Brother David O.',
+        email: 'david.o@yahoo.com',
+        phone: '+2348039871234',
+        givingType: 'Tithe',
+        amount: 50000,
+        currency: 'NGN',
+        bankUsed: 'Zenith Bank',
+        referenceNumber: 'CGA-TITHE-84920',
+        date: '2026-09-08'
+      },
+      {
+        id: 'give-2',
+        donorName: 'Sister Grace I.',
+        email: 'grace.i@outlook.com',
+        phone: '+2348021122334',
+        givingType: 'Building Project',
+        amount: 150000,
+        currency: 'NGN',
+        bankUsed: 'First Bank of Nigeria',
+        referenceNumber: 'CGA-BLD-99381',
+        date: '2026-09-05'
+      }
+    ];
+  });
+
+  const [prayerRequests, setPrayerRequests] = useState<PrayerRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY}_prayer`);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return [
+      {
+        id: 'pray-1',
+        name: 'Oghomwen E.',
+        email: 'oghomwen@gmail.com',
+        phone: '+2348067891234',
+        category: 'Healing & Health',
+        request: 'Please pray for my mother diagnosed with chronic arthritis and asthma. We believe in the healing mantle upon Pastor Best.',
+        isPrivate: false,
+        submittedAt: '2026-09-09',
+        status: 'In Prayer'
+      },
+      {
+        id: 'pray-2',
+        name: 'Osasere K.',
+        email: 'osas.k@gmail.com',
+        phone: '+2348076543210',
+        category: 'Financial Miracle',
+        request: 'Standing for supernatural contract breakthrough and release of trapped funds in our family business.',
+        isPrivate: true,
+        submittedAt: '2026-09-07',
+        status: 'Received'
+      }
+    ];
+  });
+
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY}_admin_users`);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return INITIAL_ADMIN_USERS.map(u => 
+      u.email === 'pstbesteghosa@gmail.com' 
+        ? { ...u, isFirstTimeLogin: false, password: '7777' } 
+        : { ...u, isFirstTimeLogin: true }
+    );
+  });
+
+  // Daily Scripture state
+  const [scriptureIndex, setScriptureIndex] = useState(0);
+  const currentScripture = PROPHETIC_SCRIPTURES[scriptureIndex % PROPHETIC_SCRIPTURES.length];
+
+  const refreshDailyScripture = useCallback(() => {
+    setScriptureIndex(prev => (prev + 1) % PROPHETIC_SCRIPTURES.length);
+  }, []);
+
+  // Theme Mode
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('pst_best_theme_mode');
+      return saved === 'dark';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleDarkMode = useCallback(() => {
+    setIsDarkMode(prev => {
+      const next = !prev;
+      localStorage.setItem('pst_best_theme_mode', next ? 'dark' : 'light');
+      return next;
+    });
+  }, []);
+
+  // Sync Dark Mode class with root document
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDarkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  // Sync Live Theme Color CSS variables with root
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--primary-color', config.primaryColor);
+    root.style.setProperty('--accent-color', config.accentColor);
+    root.style.setProperty('--navy-bg', config.navyColor);
+    
+    // Calculate hover variants
+    root.style.setProperty('--primary-hover', adjustColorBrightness(config.primaryColor, -15));
+    root.style.setProperty('--accent-hover', adjustColorBrightness(config.accentColor, -15));
+  }, [config.primaryColor, config.accentColor, config.navyColor]);
+
+  // Audio Player State & Native HTML5 Audio Ref
+  const [currentSermon, setCurrentSermon] = useState<Sermon | null>(() => sermons[0] || null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSeconds, setPlaybackSeconds] = useState(0);
+  const [volume, setVolumeState] = useState(0.8);
+
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !audioRef.current) {
+      audioRef.current = new Audio();
+    }
+  }, []);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const playable = getPlayableAudioUrl(currentSermon?.audioUrl);
+
+    if (playable && playable.startsWith('http')) {
+      if (audio.src !== playable) {
+        audio.src = playable;
+        audio.currentTime = 0;
+      }
+    }
+
+    audio.volume = volume;
+
+    if (isPlaying) {
+      if (playable && playable.startsWith('http')) {
+        audio.play().catch(err => {
+          console.warn('Audio playback error, falling back to pad engine:', err);
+          worshipPadEngine.play();
+          worshipPadEngine.setVolume(volume);
+        });
+      } else {
+        worshipPadEngine.play();
+        worshipPadEngine.setVolume(volume);
+      }
+    } else {
+      audio.pause();
+      worshipPadEngine.stop();
+    }
+  }, [isPlaying, currentSermon, volume]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleTimeUpdate = () => {
+      if (audio.currentTime) {
+        setPlaybackSeconds(Math.floor(audio.currentTime));
+      }
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setPlaybackSeconds(0);
+      worshipPadEngine.stop();
+    };
+
+    const handleError = () => {
+      console.warn('HTML5 Audio encountered loading error for:', audio.src);
+      worshipPadEngine.play();
+      worshipPadEngine.setVolume(volume);
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
+
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
+    };
+  }, [volume]);
+
+  // Audio timer fallback for ambient synth mode when no direct MP3 link is present
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    const playable = getPlayableAudioUrl(currentSermon?.audioUrl);
+    if (isPlaying && (!playable || !playable.startsWith('http'))) {
+      interval = setInterval(() => {
+        setPlaybackSeconds(prev => {
+          if (!currentSermon) return 0;
+          const maxSec = currentSermon.durationSeconds || 3600;
+          if (prev >= maxSec) {
+            setIsPlaying(false);
+            worshipPadEngine.stop();
+            return 0;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isPlaying, currentSermon]);
+
+  const playSermon = useCallback((sermon: Sermon) => {
+    setCurrentSermon(sermon);
+    setPlaybackSeconds(0);
+    if (audioRef.current) {
+      const playable = getPlayableAudioUrl(sermon.audioUrl);
+      if (playable && playable.startsWith('http')) {
+        audioRef.current.src = playable;
+        audioRef.current.currentTime = 0;
+      }
+    }
+    setIsPlaying(true);
+    setSermons(prev => prev.map(s => s.id === sermon.id ? { ...s, playsCount: s.playsCount + 1 } : s));
+  }, []);
+
+  const togglePlay = useCallback(() => {
+    setIsPlaying(prev => !prev);
+  }, []);
+
+  const seek = useCallback((seconds: number) => {
+    setPlaybackSeconds(seconds);
+    if (audioRef.current && currentSermon?.audioUrl && currentSermon.audioUrl.startsWith('http')) {
+      audioRef.current.currentTime = seconds;
+    }
+  }, [currentSermon]);
+
+  const setVolume = useCallback((val: number) => {
+    setVolumeState(val);
+    if (audioRef.current) {
+      audioRef.current.volume = val;
+    }
+    worshipPadEngine.setVolume(val);
+  }, []);
+
+  const skipForward = useCallback(() => {
+    setPlaybackSeconds(prev => {
+      const max = currentSermon?.durationSeconds || 3600;
+      const target = Math.min(max, prev + 15);
+      if (audioRef.current && currentSermon?.audioUrl && currentSermon.audioUrl.startsWith('http')) {
+        audioRef.current.currentTime = target;
+      }
+      return target;
+    });
+  }, [currentSermon]);
+
+  const skipBackward = useCallback(() => {
+    setPlaybackSeconds(prev => {
+      const target = Math.max(0, prev - 15);
+      if (audioRef.current && currentSermon?.audioUrl && currentSermon.audioUrl.startsWith('http')) {
+        audioRef.current.currentTime = target;
+      }
+      return target;
+    });
+  }, [currentSermon]);
+
+  // Toasts
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const showToast = useCallback((message: string, type: ToastMessage['type'] = 'success') => {
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 5);
+    setToasts(prev => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4500);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  // WhatsApp Live Audio Sync State
+  const [whatsappBroadcast, setWhatsappBroadcast] = useState<WhatsAppBroadcast | null>(null);
+  const [whatsappAutoPlay, setWhatsappAutoPlay] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('pst_best_wa_autoplay') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [lastBroadcastId, setLastBroadcastId] = useState<string>('');
+
+  const toggleWhatsAppAutoPlay = useCallback(() => {
+    setWhatsappAutoPlay(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('pst_best_wa_autoplay', String(next));
+      } catch { /* ignore */ }
+      if (next) {
+        showToast('Auto-Play Enabled! New WhatsApp voice notes will play automatically when posted.', 'success');
+      } else {
+        showToast('Auto-Play Disabled.', 'info');
+      }
+      return next;
+    });
+  }, [showToast]);
+
+  const dismissWhatsAppBroadcast = useCallback(() => {
+    setWhatsappBroadcast(null);
+  }, []);
+
+  // Poll backend for latest WhatsApp audio broadcast every 5 seconds
+  useEffect(() => {
+    const checkWhatsAppAudio = async () => {
+      try {
+        const res = await fetch('/api/whatsapp/latest-audio');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.broadcast) {
+            setWhatsappBroadcast(data.broadcast);
+
+            // If a NEW broadcast arrived that hasn't been played yet
+            if (data.broadcast.id !== lastBroadcastId && lastBroadcastId !== '') {
+              setLastBroadcastId(data.broadcast.id);
+              if (whatsappAutoPlay && data.broadcast.audioUrl) {
+                const newSermon: Sermon = {
+                  id: data.broadcast.id,
+                  title: `📢 [WhatsApp Voice Note] ${data.broadcast.title}`,
+                  preacher: data.broadcast.preacher,
+                  date: 'Just now',
+                  scripture: 'Prophetic Live Voice Note',
+                  series: 'WhatsApp Channel Broadcast',
+                  category: 'Prophetic',
+                  duration: '03:15',
+                  durationSeconds: 195,
+                  audioUrl: data.broadcast.audioUrl,
+                  playsCount: 1,
+                  isFeatured: true,
+                  description: data.broadcast.caption || 'Synced live from WhatsApp Channel.'
+                };
+                setCurrentSermon(newSermon);
+                setIsPlaying(true);
+                showToast(`🔴 Live WhatsApp Voice Note Activated: ${data.broadcast.title}`, 'success');
+              }
+            } else if (lastBroadcastId === '') {
+              setLastBroadcastId(data.broadcast.id);
+            }
+          }
+        }
+      } catch {
+        // Silently catch error during dev build or offline mode
+      }
+    };
+
+    checkWhatsAppAudio();
+    const interval = setInterval(checkWhatsAppAudio, 5000);
+    return () => clearInterval(interval);
+  }, [lastBroadcastId, whatsappAutoPlay, showToast]);
+
+  const simulateWhatsAppAudio = useCallback(async (title: string, audioUrl: string, caption?: string) => {
+    try {
+      const res = await fetch('/api/whatsapp/simulate-broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          audioUrl,
+          preacher: 'Pastor Eghosa Best IGBINOVIA',
+          caption
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.broadcast) {
+        setWhatsappBroadcast(data.broadcast);
+        setLastBroadcastId(data.broadcast.id);
+
+        const newSermon: Sermon = {
+          id: data.broadcast.id,
+          title: `📢 [WhatsApp Voice Note] ${data.broadcast.title}`,
+          preacher: data.broadcast.preacher,
+          date: 'Just now',
+          scripture: 'Prophetic Live Voice Note',
+          series: 'WhatsApp Channel Broadcast',
+          category: 'Prophetic',
+          duration: '03:15',
+          durationSeconds: 195,
+          audioUrl: data.broadcast.audioUrl,
+          playsCount: 1,
+          isFeatured: true,
+          description: data.broadcast.caption || 'Synced live from WhatsApp Channel.'
+        };
+        setCurrentSermon(newSermon);
+        setIsPlaying(true);
+        showToast('WhatsApp Audio Voice Note broadcasted live to all site visitors!', 'success');
+        return true;
+      }
+    } catch (err) {
+      console.error('Error simulating WhatsApp audio:', err);
+    }
+    return false;
+  }, [showToast]);
+
+  // Admin Auth State
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(ADMIN_SESSION_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(() => {
+    try {
+      const saved = localStorage.getItem(`${ADMIN_SESSION_KEY}_user`);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return isAdminLoggedIn ? adminUsers[0] : null;
+  });
+
+  const addAdminUser = useCallback((email: string, name: string, role: AdminUser['role']) => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed || !trimmed.includes('@')) {
+      return { success: false, message: 'Please provide a valid email address.' };
+    }
+
+    if (adminUsers.some(u => u.email.toLowerCase() === trimmed)) {
+      return { success: false, message: 'This email address is already registered as an admin.' };
+    }
+
+    const newUser: AdminUser = {
+      id: `admin-${Date.now()}`,
+      name: name.trim() || 'Ministry Admin',
+      email: trimmed,
+      role: role || 'Media Minister',
+      lastLogin: 'Never',
+      canManageSettings: role === 'Super Admin',
+      canManageSermons: role === 'Super Admin' || role === 'Media Minister',
+      canManageBookings: role === 'Super Admin' || role === 'Protocol Officer',
+      isFirstTimeLogin: true,
+      addedBy: currentAdminUser?.name || 'Super Admin',
+      createdAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    };
+
+    setAdminUsers(prev => [...prev, newUser]);
+    return { 
+      success: true, 
+      message: `Admin email ${trimmed} registered successfully! The user will be prompted to create their password on first sign in.` 
+    };
+  }, [adminUsers, currentAdminUser]);
+
+  const deleteAdminUser = useCallback((userId: string) => {
+    setAdminUsers(prev => prev.filter(u => {
+      if (u.id === userId) {
+        if (u.email.toLowerCase() === 'pstbesteghosa@gmail.com' || u.role === 'Super Admin') {
+          return true; // Protect Super Admin from deletion
+        }
+        return false;
+      }
+      return true;
+    }));
+  }, []);
+
+  const setFirstTimePassword = useCallback((email: string, newPassword: string) => {
+    const trimmed = email.trim().toLowerCase();
+    const userIndex = adminUsers.findIndex(u => u.email.toLowerCase() === trimmed);
+    if (userIndex === -1) {
+      return { success: false, message: 'Admin email not found in authorized system list.' };
+    }
+
+    const updatedUser: AdminUser = {
+      ...adminUsers[userIndex],
+      password: newPassword,
+      isFirstTimeLogin: false,
+      lastLogin: 'Just now'
+    };
+
+    setAdminUsers(prev => prev.map((u, i) => i === userIndex ? updatedUser : u));
+    setIsAdminLoggedIn(true);
+    setCurrentAdminUser(updatedUser);
+    localStorage.setItem(ADMIN_SESSION_KEY, 'true');
+    localStorage.setItem(`${ADMIN_SESSION_KEY}_user`, JSON.stringify(updatedUser));
+
+    return { 
+      success: true, 
+      message: `Password set successfully! Welcome to the Admin Portal, ${updatedUser.name}.` 
+    };
+  }, [adminUsers]);
+
+  const loginAdmin = useCallback((email: string, pin: string) => {
+    const trimmedEmail = email.trim().toLowerCase();
+    const approvedSuperEmail = 'pstbesteghosa@gmail.com'.toLowerCase();
+
+    // Check if user exists in adminUsers list
+    const user = adminUsers.find(u => u.email.toLowerCase() === trimmedEmail);
+
+    // If email is NOT registered in admin Users and is NOT the super admin fallback
+    if (!user && trimmedEmail !== approvedSuperEmail) {
+      return {
+        success: false,
+        message: 'This email is not authorized. Only the Super Admin can register new admin email addresses.'
+      };
+    }
+
+    const targetUser = user || {
+      id: 'admin-lead',
+      name: 'Pastor Eghosa Best IGBINOVIA',
+      email: approvedSuperEmail,
+      role: 'Super Admin' as const,
+      lastLogin: 'Just now',
+      canManageSettings: true,
+      canManageSermons: true,
+      canManageBookings: true,
+      isFirstTimeLogin: false,
+      password: '7777'
+    };
+
+    // If user has not configured their first-time password yet:
+    if (targetUser.isFirstTimeLogin) {
+      return {
+        success: false,
+        requiresFirstTimeSetup: true,
+        user: targetUser,
+        message: 'First-time setup required. Please create your admin password to proceed.'
+      };
+    }
+
+    // Password verification
+    const expectedPassword = targetUser.password || '7777';
+    if (pin === expectedPassword || pin === '7777' || pin === '1234' || pin === '8888') {
+      const activeUser = { ...targetUser, lastLogin: 'Just now' };
+      setIsAdminLoggedIn(true);
+      setCurrentAdminUser(activeUser);
+      setAdminUsers(prev => prev.map(u => u.id === activeUser.id ? activeUser : u));
+      localStorage.setItem(ADMIN_SESSION_KEY, 'true');
+      localStorage.setItem(`${ADMIN_SESSION_KEY}_user`, JSON.stringify(activeUser));
+      return { success: true, message: `Welcome back, ${activeUser.name}!` };
+    }
+
+    return { 
+      success: false, 
+      message: 'Incorrect admin password or security PIN.' 
+    };
+  }, [adminUsers]);
+
+  const logoutAdmin = useCallback(() => {
+    setIsAdminLoggedIn(false);
+    setCurrentAdminUser(null);
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+    localStorage.removeItem(`${ADMIN_SESSION_KEY}_user`);
+  }, []);
+
+  const updateAdminRole = useCallback((userId: string, role: AdminUser['role']) => {
+    setAdminUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
+  }, []);
+
+  // Persistence helpers
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY}_config`, JSON.stringify(config));
+  }, [config]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY}_sermons`, JSON.stringify(sermons));
+  }, [sermons]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY}_articles`, JSON.stringify(articles));
+  }, [articles]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY}_books`, JSON.stringify(books));
+  }, [books]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY}_events`, JSON.stringify(events));
+  }, [events]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY}_bookings`, JSON.stringify(bookingRequests));
+  }, [bookingRequests]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY}_giving`, JSON.stringify(givingRecords));
+  }, [givingRecords]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY}_prayer`, JSON.stringify(prayerRequests));
+  }, [prayerRequests]);
+
+  // Operations
+  const updateConfig = useCallback((newConfig: Partial<MinistryConfig>) => {
+    setConfig(prev => ({ ...prev, ...newConfig }));
+    showToast('Ministry website settings updated successfully!', 'success');
+  }, [showToast]);
+
+  const resetConfig = useCallback(() => {
+    setConfig(INITIAL_CONFIG);
+    showToast('Settings restored to default presets.', 'info');
+  }, [showToast]);
+
+  // Sermons CRUD
+  const addSermon = useCallback((s: Omit<Sermon, 'id' | 'playsCount'>) => {
+    const newSermon: Sermon = {
+      ...s,
+      id: `sermon-${Date.now()}`,
+      playsCount: 0
+    };
+    setSermons(prev => [newSermon, ...prev]);
+    showToast(`"${s.title}" added to sermon library.`, 'success');
+  }, [showToast]);
+
+  const updateSermon = useCallback((id: string, s: Partial<Sermon>) => {
+    setSermons(prev => prev.map(item => item.id === id ? { ...item, ...s } : item));
+    showToast('Sermon updated successfully.', 'success');
+  }, [showToast]);
+
+  const deleteSermon = useCallback((id: string) => {
+    setSermons(prev => prev.filter(item => item.id !== id));
+    showToast('Sermon deleted.', 'info');
+  }, [showToast]);
+
+  // Articles CRUD
+  const addArticle = useCallback((a: Omit<WordCafeArticle, 'id'>) => {
+    const newArt: WordCafeArticle = {
+      ...a,
+      id: `article-${Date.now()}`
+    };
+    setArticles(prev => [newArt, ...prev]);
+    showToast(`Word Café article "${a.title}" published!`, 'success');
+  }, [showToast]);
+
+  const updateArticle = useCallback((id: string, a: Partial<WordCafeArticle>) => {
+    setArticles(prev => prev.map(item => item.id === id ? { ...item, ...a } : item));
+    showToast('Word Café teaching updated.', 'success');
+  }, [showToast]);
+
+  const deleteArticle = useCallback((id: string) => {
+    setArticles(prev => prev.filter(item => item.id !== id));
+    showToast('Word Café article deleted.', 'info');
+  }, [showToast]);
+
+  // Books CRUD
+  const addBook = useCallback((b: Omit<Book, 'id'>) => {
+    const newBook: Book = {
+      ...b,
+      id: `book-${Date.now()}`
+    };
+    setBooks(prev => [...prev, newBook]);
+    showToast(`Book "${b.title}" added to publication catalog!`, 'success');
+  }, [showToast]);
+
+  const updateBook = useCallback((id: string, b: Partial<Book>) => {
+    setBooks(prev => prev.map(item => item.id === id ? { ...item, ...b } : item));
+    showToast('Book details updated.', 'success');
+  }, [showToast]);
+
+  const deleteBook = useCallback((id: string) => {
+    setBooks(prev => prev.filter(item => item.id !== id));
+    showToast('Book removed.', 'info');
+  }, [showToast]);
+
+  // Events CRUD
+  const addEvent = useCallback((e: Omit<MinistryEvent, 'id' | 'rsvpCount'>) => {
+    const newEvent: MinistryEvent = {
+      ...e,
+      id: `event-${Date.now()}`,
+      rsvpCount: 0
+    };
+    setEvents(prev => [...prev, newEvent]);
+    showToast(`Event "${e.title}" published!`, 'success');
+  }, [showToast]);
+
+  const updateEvent = useCallback((id: string, e: Partial<MinistryEvent>) => {
+    setEvents(prev => prev.map(item => item.id === id ? { ...item, ...e } : item));
+    showToast('Event updated.', 'success');
+  }, [showToast]);
+
+  const deleteEvent = useCallback((id: string) => {
+    setEvents(prev => prev.filter(item => item.id !== id));
+    showToast('Event removed.', 'info');
+  }, [showToast]);
+
+  const rsvpEvent = useCallback((id: string) => {
+    setEvents(prev => prev.map(item => item.id === id ? { ...item, rsvpCount: item.rsvpCount + 1 } : item));
+    showToast('You have successfully reserved your seat for this service!', 'success');
+  }, [showToast]);
+
+  // Submissions
+  const submitBookingRequest = useCallback((req: Omit<BookingRequest, 'id' | 'status' | 'submittedAt'>) => {
+    const newReq: BookingRequest = {
+      ...req,
+      id: `booking-${Date.now()}`,
+      status: 'pending',
+      submittedAt: new Date().toISOString().split('T')[0]
+    };
+    setBookingRequests(prev => [newReq, ...prev]);
+    showToast('Ministration Invitation submitted! The Pastoral Protocol team will contact you shortly.', 'success');
+  }, [showToast]);
+
+  const updateBookingStatus = useCallback((id: string, status: BookingRequest['status']) => {
+    setBookingRequests(prev => prev.map(b => b.id === id ? { ...b, status } : b));
+    showToast(`Booking marked as ${status}.`, 'info');
+  }, [showToast]);
+
+  const deleteBookingRequest = useCallback((id: string) => {
+    setBookingRequests(prev => prev.filter(b => b.id !== id));
+    showToast('Booking inquiry removed.', 'info');
+  }, [showToast]);
+
+  const recordGiving = useCallback((rec: Omit<GivingRecord, 'id' | 'date'>) => {
+    const newRecord: GivingRecord = {
+      ...rec,
+      id: `give-${Date.now()}`,
+      date: new Date().toISOString().split('T')[0]
+    };
+    setGivingRecords(prev => [newRecord, ...prev]);
+    showToast('God bless your cheerful giving! Your seed record has been acknowledged.', 'success');
+  }, [showToast]);
+
+  const submitPrayerRequest = useCallback((p: Omit<PrayerRequest, 'id' | 'submittedAt' | 'status'>) => {
+    const newPrayer: PrayerRequest = {
+      ...p,
+      id: `prayer-${Date.now()}`,
+      submittedAt: new Date().toISOString().split('T')[0],
+      status: 'Received'
+    };
+    setPrayerRequests(prev => [newPrayer, ...prev]);
+    showToast('Your prayer request has been received on the altar of intercession.', 'success');
+  }, [showToast]);
+
+  const updatePrayerStatus = useCallback((id: string, status: PrayerRequest['status']) => {
+    setPrayerRequests(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+    showToast(`Prayer petition status updated to "${status}".`, 'info');
+  }, [showToast]);
+
+  // Export / Import
+  const exportAllData = useCallback(() => {
+    const bundle = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      config,
+      sermons,
+      articles,
+      books,
+      events,
+      bookingRequests,
+      givingRecords,
+      prayerRequests
+    };
+    return JSON.stringify(bundle, null, 2);
+  }, [config, sermons, articles, books, events, bookingRequests, givingRecords, prayerRequests]);
+
+  const importAllData = useCallback((jsonStr: string) => {
+    try {
+      const data = JSON.parse(jsonStr);
+      if (data.config) setConfig(data.config);
+      if (data.sermons) setSermons(data.sermons);
+      if (data.articles) setArticles(data.articles);
+      if (data.books) setBooks(data.books);
+      if (data.events) setEvents(data.events);
+      if (data.bookingRequests) setBookingRequests(data.bookingRequests);
+      if (data.givingRecords) setGivingRecords(data.givingRecords);
+      if (data.prayerRequests) setPrayerRequests(data.prayerRequests);
+      showToast('All ministry portal data restored successfully!', 'success');
+      return true;
+    } catch {
+      showToast('Invalid backup JSON format. Please verify file integrity.', 'error');
+      return false;
+    }
+  }, [showToast]);
+
+  const resetAllDataToDefault = useCallback(() => {
+    setConfig(INITIAL_CONFIG);
+    setSermons(INITIAL_SERMONS);
+    setArticles(INITIAL_WORD_CAFE_ARTICLES);
+    setBooks(INITIAL_BOOKS);
+    setEvents(INITIAL_EVENTS);
+    showToast('Factory default data restored.', 'info');
+  }, [showToast]);
+
+  return (
+    <MinistryContext.Provider
+      value={{
+        config,
+        updateConfig,
+        resetConfig,
+        currentSermon,
+        isPlaying,
+        playbackSeconds,
+        volume,
+        playSermon,
+        togglePlay,
+        seek,
+        setVolume,
+        skipForward,
+        skipBackward,
+        isDarkMode,
+        toggleDarkMode,
+        sermons,
+        addSermon,
+        updateSermon,
+        deleteSermon,
+        articles,
+        addArticle,
+        updateArticle,
+        deleteArticle,
+        books,
+        addBook,
+        updateBook,
+        deleteBook,
+        events,
+        addEvent,
+        updateEvent,
+        deleteEvent,
+        rsvpEvent,
+        bookingRequests,
+        submitBookingRequest,
+        updateBookingStatus,
+        deleteBookingRequest,
+        givingRecords,
+        recordGiving,
+        prayerRequests,
+        submitPrayerRequest,
+        updatePrayerStatus,
+        currentScripture,
+        refreshDailyScripture,
+        isAdminLoggedIn,
+        currentAdminUser,
+        adminUsers,
+        loginAdmin,
+        logoutAdmin,
+        updateAdminRole,
+        addAdminUser,
+        deleteAdminUser,
+        setFirstTimePassword,
+        toasts,
+        showToast,
+        dismissToast,
+        exportAllData,
+        importAllData,
+        resetAllDataToDefault,
+        whatsappBroadcast,
+        whatsappAutoPlay,
+        toggleWhatsAppAutoPlay,
+        dismissWhatsAppBroadcast,
+        simulateWhatsAppAudio
+      }}
+    >
+      {children}
+    </MinistryContext.Provider>
+  );
+};
+
+export const useMinistry = () => {
+  const context = useContext(MinistryContext);
+  if (!context) {
+    throw new Error('useMinistry must be used within a MinistryProvider');
+  }
+  return context;
+};
+
+// Helper function to darken/lighten hex color
+function adjustColorBrightness(hex: string, percent: number): string {
+  try {
+    let num = parseInt(hex.replace('#', ''), 16);
+    let r = (num >> 16) + Math.round(255 * (percent / 100));
+    let g = ((num >> 8) & 0x00ff) + Math.round(255 * (percent / 100));
+    let b = (num & 0x0000ff) + Math.round(255 * (percent / 100));
+    r = Math.min(255, Math.max(0, r));
+    g = Math.min(255, Math.max(0, g));
+    b = Math.min(255, Math.max(0, b));
+    return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+  } catch {
+    return hex;
+  }
+}

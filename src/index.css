@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --primary-color: #C8102E;
+  --primary-hover: #a10d24;
+  --accent-color: #D4AF37;
+  --accent-hover: #b8972b;
+  --navy-bg: #0A2342;
+  --navy-dark: #051329;
+  color-scheme: light dark;
+}
+
+html {
+  background-color: #f8fafc;
+  color: #0f172a;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+html.dark {
+  background-color: var(--navy-bg, #0A2342);
+  color: #f8fafc;
+}
+
+/* Ensure all form controls always have high contrast legible text */
+input, select, textarea {
+  color: #0f172a;
+}
+
+.dark input, .dark select, .dark textarea {
+  color: #f8fafc;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #64748b;
+  opacity: 0.8;
+}
+
+.dark input::placeholder, .dark textarea::placeholder {
+  color: #94a3b8;
+  opacity: 0.8;
+}
+
+.font-serif-royal {
+  font-family: 'Cinzel', Georgia, serif;
+}
+
+.font-sans-body {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(140, 150, 170, 0.35);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 150, 170, 0.6);
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.92; transform: scale(1.02); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 3s ease-in-out infinite;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
