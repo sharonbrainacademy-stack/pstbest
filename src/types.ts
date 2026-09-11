@@ -5,17 +5,41 @@ export interface BankAccount {
   purpose: string;
 }
 
+export interface ServiceScheduleBreakdown {
+  title: string;
+  time: string;
+  description: string;
+}
+
 export interface ServiceTime {
+  id?: string;
   title: string;
   day: string;
   time: string;
   description: string;
+  frequency?: string;
+  category?: 'Weekly Services' | 'Sunday Services' | 'Ministers Fellowship' | 'Special Sunday Services' | 'Monthly Programmes' | string;
+  overallTime?: string;
+  subServices?: ServiceScheduleBreakdown[];
+  location?: string;
+  badge?: string;
+}
+
+export interface MinistryHeroBanner {
+  id: string;
+  imageUrl: string;
+  title?: string;
+  subtitle?: string;
+  linkUrl?: string;
+  linkText?: string;
+  isActive?: boolean;
 }
 
 export interface MinistryConfig {
   pastorName: string;
   ministryTitle: string;
   churchName: string;
+  churchServicesOverview?: string;
   branchHeadquarters: string;
   motto: string;
   announcementBanner: string;
@@ -30,6 +54,7 @@ export interface MinistryConfig {
   accentColor: string;
   navyColor: string;
   heroImageUrl: string;
+  heroBanners?: MinistryHeroBanner[];
   aboutExecutiveImageUrl: string;
   pastorAndWifeImageUrl: string;
   wordCafeBannerUrl: string;

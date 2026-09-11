@@ -88,22 +88,47 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, onOpenPrayerModal 
             </div>
           </div>
 
-          {/* Service Times */}
+          {/* Church Services & Programmes */}
           <div className="lg:col-span-4 space-y-3 text-left">
-            <div className="flex items-center gap-2 text-white font-serif-royal font-bold text-base">
-              <Clock className="w-4 h-4 text-amber-400" />
-              <span>Weekly Service Times</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-white font-serif-royal font-bold text-base">
+                <Clock className="w-4 h-4 text-amber-400" />
+                <span>Church Services & Programmes</span>
+              </div>
+              <button
+                onClick={() => setActiveTab('events')}
+                className="text-[11px] text-amber-300 hover:text-amber-200 font-semibold underline underline-offset-2"
+              >
+                Full Schedule
+              </button>
             </div>
 
-            <div className="space-y-2.5">
+            <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
               {config.serviceTimes.map((service, idx) => (
-                <div key={idx} className="p-3 rounded-xl bg-white/5 border border-white/5 text-xs space-y-1">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-amber-300">{service.title}</span>
-                    <span className="text-slate-400 font-mono text-[11px]">{service.day}</span>
+                <div key={idx} className="p-3 rounded-xl bg-white/5 border border-white/5 text-xs space-y-1.5 hover:border-amber-400/30 transition-all">
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="font-bold text-amber-300 leading-snug">{service.title}</span>
+                    <span className="text-slate-400 font-mono text-[10px] whitespace-nowrap bg-white/5 px-2 py-0.5 rounded">
+                      {service.frequency || service.day}
+                    </span>
                   </div>
-                  <div className="text-white font-semibold">{service.time}</div>
-                  <p className="text-[11px] text-slate-400 leading-normal">{service.description}</p>
+
+                  <div className="text-white font-semibold font-mono text-xs text-amber-200">
+                    {service.time}
+                  </div>
+
+                  {service.subServices && service.subServices.length > 0 ? (
+                    <div className="space-y-1 pt-1 border-t border-white/5">
+                      {service.subServices.map((sub, sIdx) => (
+                        <div key={sIdx} className="flex items-baseline justify-between text-[11px] text-slate-300">
+                          <span>{sub.title}</span>
+                          <span className="font-mono text-slate-400 text-[10px]">{sub.time}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 leading-normal line-clamp-2">{service.description}</p>
+                  )}
                 </div>
               ))}
             </div>

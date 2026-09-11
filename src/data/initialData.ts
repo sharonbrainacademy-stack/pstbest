@@ -3,7 +3,8 @@ import { MinistryConfig, Sermon, WordCafeArticle, Book, MinistryEvent, DailyScri
 export const INITIAL_CONFIG: MinistryConfig = {
   pastorName: 'Pastor Eghosa Best IGBINOVIA (PST BEST EGHOSA)',
   ministryTitle: 'Prophetic Minister, Teacher of the Word, Author & Founder',
-  churchName: 'Champions of Grace Assembly, Inc.',
+  churchName: 'Champions of Grace Assembly, Incorporated',
+  churchServicesOverview: 'Champions of Grace Assembly, Incorporated, holds regular services, fellowships, prayer meetings, and special programmes throughout the month. These gatherings provide opportunities for worship, Bible teaching, prayer, spiritual growth, fellowship, and service.',
   branchHeadquarters: 'Grace Chapel (Headquarters — Igue-Iheya, Benin City, Edo State, Nigeria)',
   motto: 'Building Lives, Spreading the Gospel & Winning Souls at All Costs',
   announcementBanner: 'Welcome to PST BEST EGHOSA personal website.',
@@ -14,22 +15,79 @@ export const INITIAL_CONFIG: MinistryConfig = {
   address: 'Grace Chapel International, Igue-Iheya, Benin City, Edo State, Nigeria',
   serviceTimes: [
     {
-      title: 'Sunday Celebration Service',
+      id: 'svc-sunday-services',
+      title: 'Sunday Services',
       day: 'Every Sunday',
-      time: '8:00 AM – 11:30 AM',
-      description: 'Atmosphere of high praise, deep apostolic revelations, and prophetic declarations for supernatural triumph.'
+      time: '6:30 a.m. – 10:30 a.m.',
+      overallTime: '6:30 a.m. – 10:30 a.m.',
+      category: 'Sunday Services',
+      badge: 'Main Sunday Assembly',
+      description: 'Overall Time: 6:30 a.m. – 10:30 a.m. The core Sunday worship assembly including Workers’ Prayer, Sunday School, and the Main Worship Service.',
+      subServices: [
+        {
+          title: 'Workers’ Prayer Meeting',
+          time: '6:30 a.m. – 7:00 a.m.',
+          description: 'A time of prayer for church workers before the day’s services begin.'
+        },
+        {
+          title: 'Sunday School',
+          time: '7:00 a.m. – 8:00 a.m.',
+          description: 'A dedicated time for systematic teaching and study of the Word of God.'
+        },
+        {
+          title: 'Main Worship Service',
+          time: '8:00 a.m. – 10:30 a.m.',
+          description: 'The main Sunday worship service includes praise, worship, prayers, testimonies, ministrations, the teaching of God’s Word, giving, and the closing benediction.'
+        }
+      ]
     },
     {
-      title: 'Wednesday Communion & Prophetic Service',
+      id: 'svc-wednesday-study',
+      title: 'Wednesday Bible Study',
       day: 'Every Wednesday',
-      time: '5:00 PM – 7:00 PM',
-      description: 'Mid-week spiritual recharging, Holy Communion, word dissection, and personalized prophetic ministration.'
+      time: '5:00 p.m. – 6:30 p.m.',
+      category: 'Weekly Services',
+      badge: 'Weekly Word Study',
+      description: 'A weekly Bible study focused on teaching and understanding the Word of God and applying biblical principles to daily life.'
     },
     {
-      title: 'Friday Night Vigil / Prophetic Hour',
+      id: 'svc-friday-prayer',
+      title: 'Friday Prayer Meeting',
       day: 'Every Friday',
-      time: '11:00 PM – 3:00 AM',
-      description: 'Intense midnight warfare, dismantling generational altars, break of yokes, and angelic interventions.'
+      time: '5:00 p.m. – 6:30 p.m.',
+      category: 'Weekly Services',
+      badge: 'Weekly Intercession',
+      description: 'A weekly prayer gathering where members come together to seek God, intercede, and receive spiritual strength.'
+    },
+    {
+      id: 'svc-anointing-communion',
+      title: 'Anointing and Holy Communion Service',
+      day: 'First Sunday of Every Month',
+      frequency: 'First Sunday of every month',
+      time: '8:00 a.m. – 12:00 noon',
+      category: 'Special Sunday Services',
+      badge: '1st Sunday of the Month',
+      description: 'A special monthly service dedicated to worship, prayer, anointing, and Holy Communion.'
+    },
+    {
+      id: 'svc-ministers-fellowship',
+      title: 'Ministers’ Prayer and Fasting Fellowship',
+      day: 'Every Second Monday of the Month',
+      frequency: 'Every second Monday of the month',
+      time: '9:00 a.m. – 12:00 p.m.',
+      category: 'Ministers Fellowship',
+      badge: 'Ministers In-House',
+      description: 'This is an in-house fellowship specifically for ministers serving at Champions of Grace Assembly. It provides a dedicated time for ministers to pray, fast, seek God’s direction, strengthen one another, and intercede for the church and the work of God.'
+    },
+    {
+      id: 'svc-psalm-91-fasting',
+      title: 'Psalm 91 Three-Day Fasting and Prayer Programme',
+      day: 'First or Second Week of Each Month',
+      frequency: 'Held either in the first or second week of each month, as announced by the church',
+      time: '8:00 a.m. – 12:00 noon',
+      category: 'Monthly Programmes',
+      badge: 'Monthly 3-Day Programme',
+      description: 'The Psalm 91 Three-Day Fasting and Prayer Programme is held either in the first or second week of each month, as announced by the church. The programme provides a dedicated period for fasting, prayer, intercession, and seeking God’s intervention and protection.'
     }
   ],
   bankAccounts: [
@@ -50,6 +108,17 @@ export const INITIAL_CONFIG: MinistryConfig = {
   accentColor: '#D4AF37', // Royal Gold
   navyColor: '#0A2342', // Regal Dark Navy
   heroImageUrl: 'https://i.postimg.cc/1zJvWQv9/9623BAC8-75C6-4928-A7F8-8E2930DC25CD.jpg',
+  heroBanners: [
+    {
+      id: 'banner-1',
+      imageUrl: 'https://i.postimg.cc/1zJvWQv9/9623BAC8-75C6-4928-A7F8-8E2930DC25CD.jpg',
+      title: 'Pastor Eghosa Best IGBINOVIA',
+      subtitle: 'Champions of Grace Assembly International — Grace Chapel Headquarters',
+      linkUrl: 'events',
+      linkText: 'Upcoming Prophetic Encounter',
+      isActive: true
+    }
+  ],
   aboutExecutiveImageUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=1200&q=80',
   pastorAndWifeImageUrl: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1200&q=80',
   wordCafeBannerUrl: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=1200&q=80',
@@ -364,6 +433,32 @@ export const INITIAL_EVENTS: MinistryEvent[] = [
     isFeatured: false,
     category: 'Special Service',
     rsvpCount: 420
+  },
+  {
+    id: 'event-4',
+    title: 'Psalm 91 Three-Day Fasting and Prayer Programme',
+    theme: '“Divine Protection, Supernatural Intervention & Covenant Exemption”',
+    startDate: 'First / Second Week of Each Month (As Announced)',
+    time: '8:00 a.m. – 12:00 noon Daily',
+    venue: 'Grace Chapel Auditorium, Igue-Iheya, Benin City & Virtual Broadcast',
+    minister: 'Pastor Eghosa Best IGBINOVIA',
+    description: 'A monthly three-day sacred convocation for intense fasting, intercession, prayer, and invoking the divine covenant of Psalm 91 for family preservation and victory.',
+    isFeatured: true,
+    category: 'Special Service',
+    rsvpCount: 1280
+  },
+  {
+    id: 'event-5',
+    title: 'Anointing and Holy Communion Service',
+    theme: '“The Mystery of the Covenant Table & the Prophetic Oil”',
+    startDate: 'First Sunday of Every Month',
+    time: '8:00 a.m. – 12:00 noon Prompt',
+    venue: 'Grace Chapel International Headquarters, Igue-Iheya, Benin City',
+    minister: 'Pastor Eghosa Best IGBINOVIA',
+    description: 'A special monthly service dedicated to worship, prevailing prayer, Holy Communion at the Lord’s Table, and prophetic anointing for supernatural breakthroughs.',
+    isFeatured: true,
+    category: 'Special Service',
+    rsvpCount: 1650
   }
 ];
 

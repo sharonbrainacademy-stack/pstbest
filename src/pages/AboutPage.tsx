@@ -101,7 +101,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ setActiveTab, onOpenPrayer
           </p>
 
           <p className="text-sm sm:text-base">
-            Under this mandate, <strong>Champions of Grace Assembly, Inc.</strong> was birthed. Today, the ministry’s international headquarters, known as <strong>Grace Chapel</strong>, located at Igue-Iheya, Benin City, stands as a spiritual beacon drawing thousands seeking salvation, supernatural healing, demonic deliverance, and prophetic alignment.
+            Under this mandate, <strong>Champions of Grace Assembly, Incorporated</strong> was birthed. Today, the ministry’s international headquarters, known as <strong>Grace Chapel</strong>, located at Igue-Iheya, Benin City, stands as a spiritual beacon drawing thousands seeking salvation, supernatural healing, demonic deliverance, and prophetic alignment.
           </p>
 
           <h3 className="text-xl font-serif-royal font-bold text-slate-900 dark:text-white pt-2">
@@ -209,7 +209,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ setActiveTab, onOpenPrayer
               Grace Chapel (International Headquarters)
             </h3>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
-              Located at Igue-Iheya, Benin City, Edo State, Nigeria. We welcome all worshippers to our life-transforming Sunday celebrations, Wednesday communion services, and Friday midnight prophetic vigils.
+              Located at Igue-Iheya, Benin City, Edo State, Nigeria. We welcome all worshippers to our life-transforming Sunday services (6:30 a.m. – 10:30 a.m.), Wednesday Bible study (5:00 p.m. – 6:30 p.m.), Friday prayer meetings (5:00 p.m. – 6:30 p.m.), monthly Communion, and Psalm 91 fasting programmes.
             </p>
           </div>
 

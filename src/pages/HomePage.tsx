@@ -9,6 +9,7 @@ import {
   MessageCircle, 
   Calendar, 
   ChevronRight, 
+  ChevronLeft,
   Coffee, 
   BookOpen, 
   Heart, 
@@ -16,7 +17,8 @@ import {
   Sparkles, 
   Flame, 
   Clock, 
-  ArrowUpRight 
+  ArrowUpRight,
+  Image as ImageIcon
 } from 'lucide-react';
 
 interface HomePageProps {
@@ -36,8 +38,47 @@ export const HomePage: React.FC<HomePageProps> = ({ setActiveTab, onOpenArticle,
     currentSermon, 
     isPlaying, 
     togglePlay, 
-    isDarkMode 
+    isDarkMode,
+    isAdminLoggedIn
   } = useMinistry();
+
+  // Top Space Hero Banners / Carousel Logic
+  const activeBanners = (config.heroBanners && config.heroBanners.length > 0)
+    ? config.heroBanners.filter(b => b.isActive !== false)
+    : [{ id: 'default', imageUrl: config.heroImageUrl, title: '', subtitle: '', isActive: true }];
+
+  const [currentBannerIdx, setCurrentBannerIdx] = useState(0);
+  const [isBannerHovered, setIsBannerHovered] = useState(false);
+
+  // Auto-slide every 6 seconds when there are multiple banners and not hovered
+  useEffect(() => {
+    if (activeBanners.length <= 1 || isBannerHovered) return;
+    const interval = setInterval(() => {
+      setCurrentBannerIdx(prev => (prev + 1) % activeBanners.length);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [activeBanners.length, isBannerHovered]);
+
+  // Keep currentBannerIdx in bounds if banners array changes
+  useEffect(() => {
+    if (currentBannerIdx >= activeBanners.length) {
+      setCurrentBannerIdx(0);
+    }
+  }, [activeBanners.length, currentBannerIdx]);
+
+  const currentBanner = activeBanners[currentBannerIdx] || activeBanners[0];
+
+  const handleBannerAction = (linkUrl?: string) => {
+    if (!linkUrl) return;
+    if (linkUrl.startsWith('http')) {
+      window.open(linkUrl, '_blank', 'noopener,noreferrer');
+    } else if (linkUrl.startsWith('#')) {
+      const el = document.querySelector(linkUrl);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      setActiveTab(linkUrl);
+    }
+  };
 
   // Next Featured Event Countdown calculation
   const featuredEvent = events.find(e => e.isFeatured) || events[0];
@@ -73,13 +114,112 @@ export const HomePage: React.FC<HomePageProps> = ({ setActiveTab, onOpenArticle,
   return (
     <div className="space-y-16 sm:space-y-24">
       
-      {/* 1. Clean Full-Bleed Hero Banner */}
-      <section className="relative w-full overflow-hidden bg-[#0A2342] shadow-2xl">
-        <img
-          src={config.heroImageUrl}
-          alt="Pastor Eghosa Best IGBINOVIA Banner"
-          className="w-full h-auto max-h-[75vh] sm:max-h-[85vh] object-cover object-top"
-        />
+      {/* 1. Dynamic Top Space Picture / Hero Banner */}
+      <section 
+        className="relative w-full overflow-hidden bg-[#0A2342] shadow-2xl group select-none transition-all duration-500"
+        onMouseEnter={() => setIsBannerHovered(true)}
+        onMouseLeave={() => setIsBannerHovered(false)}
+      >
+        <div className="relative w-full overflow-hidden">
+          <img
+            key={currentBanner?.id || currentBanner?.imageUrl || config.heroImageUrl}
+            src={currentBanner?.imageUrl || config.heroImageUrl}
+            alt={currentBanner?.title || "Pastor Eghosa Best IGBINOVIA Banner"}
+            className={`w-full h-auto max-h-[75vh] sm:max-h-[85vh] object-cover object-top transition-opacity duration-700 ${
+              currentBanner?.linkUrl ? 'cursor-pointer' : ''
+            }`}
+            onClick={() => currentBanner?.linkUrl && handleBannerAction(currentBanner.linkUrl)}
+          />
+
+          {/* Optional Caption & Call to Action overlay if banner has title or button */}
+          {(currentBanner?.title || currentBanner?.linkUrl) && (
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-6 sm:p-10 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 pointer-events-none">
+              <div className="space-y-1 max-w-2xl text-left">
+                {currentBanner.title && (
+                  <h2 className="text-xl sm:text-3xl font-serif-royal font-bold text-white drop-shadow-md">
+                    {currentBanner.title}
+                  </h2>
+                )}
+                {currentBanner.subtitle && (
+                  <p className="text-xs sm:text-sm text-slate-200 line-clamp-2 drop-shadow">
+                    {currentBanner.subtitle}
+                  </p>
+                )}
+              </div>
+
+              {currentBanner.linkUrl && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleBannerAction(currentBanner.linkUrl);
+                  }}
+                  className="pointer-events-auto px-5 py-2.5 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold uppercase tracking-wider transition-transform hover:scale-105 shadow-xl flex items-center gap-2"
+                >
+                  <span>{currentBanner.linkText || 'Explore More'}</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Carousel Previous / Next Arrows (if multiple active banners) */}
+          {activeBanners.length > 1 && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentBannerIdx(prev => (prev - 1 + activeBanners.length) % activeBanners.length);
+                }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/40 hover:bg-black/75 text-white backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all border border-white/20 shadow-lg"
+                aria-label="Previous Banner Picture"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentBannerIdx(prev => (prev + 1) % activeBanners.length);
+                }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/40 hover:bg-black/75 text-white backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all border border-white/20 shadow-lg"
+                aria-label="Next Banner Picture"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+
+              {/* Dots indicator */}
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
+                {activeBanners.map((b, idx) => (
+                  <button
+                    key={b.id || idx}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentBannerIdx(idx);
+                    }}
+                    className={`transition-all rounded-full ${
+                      idx === currentBannerIdx 
+                        ? 'w-7 h-2 bg-amber-400' 
+                        : 'w-2 h-2 bg-white/60 hover:bg-white'
+                    }`}
+                    aria-label={`Slide ${idx + 1}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Admin Edit Shortcut Badge when Admin is logged in */}
+          {isAdminLoggedIn && (
+            <button
+              onClick={() => setActiveTab('admin')}
+              className="absolute top-4 right-4 z-20 px-3 py-1.5 rounded-full bg-black/70 hover:bg-black/90 text-amber-300 hover:text-amber-200 text-[11px] font-bold uppercase tracking-wider backdrop-blur-md border border-amber-400/50 shadow-xl flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Click to add or manage top pictures/banners in Admin Portal"
+            >
+              <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+              <span>Edit Banner / Pictures</span>
+            </button>
+          )}
+        </div>
       </section>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16 sm:space-y-24">
@@ -385,6 +525,89 @@ export const HomePage: React.FC<HomePageProps> = ({ setActiveTab, onOpenArticle,
                 <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-bold text-rose-600 dark:text-amber-400">
                   <span>View Details</span>
                   <ChevronRight className="w-4 h-4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* 6B. Church Services & Programmes */}
+        <section className="space-y-8 text-left">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b pb-4 dark:border-slate-800">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mb-1">
+                <Clock className="w-4 h-4" />
+                <span>Regular Assemblies & Special Encounters</span>
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-serif-royal font-bold text-slate-900 dark:text-white">
+                Church Services & Programmes
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 max-w-3xl mt-1">
+                Champions of Grace Assembly, Incorporated, holds regular services, fellowships, prayer meetings, and special programmes throughout the month. These gatherings provide opportunities for worship, Bible teaching, prayer, spiritual growth, fellowship, and service.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setActiveTab('events')}
+              className="text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-amber-400 hover:opacity-80 flex items-center gap-1 shrink-0"
+            >
+              <span>View Full Schedule & Programmes</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {config.serviceTimes.map((service, idx) => (
+              <div
+                key={service.id || idx}
+                className="p-6 rounded-3xl bg-white dark:bg-[#0A2342] border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-amber-400/40 transition-all flex flex-col justify-between space-y-4"
+              >
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-50 dark:bg-rose-950/80 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
+                      {service.category || service.day}
+                    </span>
+                    <span className="text-[11px] font-mono font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded">
+                      {service.frequency || service.day}
+                    </span>
+                  </div>
+
+                  <h3 className="text-base sm:text-lg font-serif-royal font-bold text-slate-900 dark:text-white">
+                    {service.title}
+                  </h3>
+
+                  <div className="text-sm font-mono font-bold text-rose-600 dark:text-amber-400">
+                    {service.time}
+                  </div>
+
+                  {service.subServices && service.subServices.length > 0 ? (
+                    <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                      {service.subServices.map((sub, sIdx) => (
+                        <div key={sIdx} className="text-xs space-y-0.5 bg-slate-50 dark:bg-slate-900/60 p-2 rounded-xl">
+                          <div className="flex justify-between items-center font-bold text-slate-900 dark:text-white text-[11px]">
+                            <span>{sub.title}</span>
+                            <span className="font-mono text-amber-500">{sub.time}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1">{sub.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-3">
+                      {service.description}
+                    </p>
+                  )}
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                  <span>Grace Chapel Headquarters</span>
+                  <button 
+                    onClick={() => setActiveTab('events')} 
+                    className="font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-0.5"
+                  >
+                    <span>Details</span>
+                    <ChevronRight className="w-3 h-3" />
+                  </button>
                 </div>
               </div>
             ))}

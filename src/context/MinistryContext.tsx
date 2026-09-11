@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { getPlayableAudioUrl } from '../utils/audioUtils';
+import { getPlayableAudioUrl, getGoogleDriveEmbedUrl, extractGoogleDriveFileId } from '../utils/audioUtils';
 import { 
   MinistryConfig, 
   Sermon, 
@@ -46,6 +46,12 @@ interface MinistryContextType {
   setVolume: (val: number) => void;
   skipForward: () => void;
   skipBackward: () => void;
+  audioPlaybackError: boolean;
+  clearAudioError: () => void;
+  isGoogleDriveAudio: boolean;
+  googleDriveEmbedUrl: string | null;
+  showDriveEmbedModal: boolean;
+  setShowDriveEmbedModal: (show: boolean) => void;
   
   // Theme
   isDarkMode: boolean;
@@ -129,7 +135,25 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [config, setConfig] = useState<MinistryConfig>(() => {
     try {
       const saved = localStorage.getItem(`${STORAGE_KEY}_config`);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const hasOfficialSchedule = parsed.serviceTimes && parsed.serviceTimes.some((s: any) => s.id === 'svc-sunday-services' || s.title === 'Wednesday Bible Study');
+        if (!hasOfficialSchedule) {
+          return {
+            ...INITIAL_CONFIG,
+            ...parsed,
+            churchName: 'Champions of Grace Assembly, Incorporated',
+            churchServicesOverview: INITIAL_CONFIG.churchServicesOverview,
+            serviceTimes: INITIAL_CONFIG.serviceTimes
+          };
+        }
+        return {
+          ...INITIAL_CONFIG,
+          ...parsed,
+          churchName: parsed.churchName || 'Champions of Grace Assembly, Incorporated',
+          churchServicesOverview: parsed.churchServicesOverview || INITIAL_CONFIG.churchServicesOverview
+        };
+      }
     } catch { /* ignore */ }
     return INITIAL_CONFIG;
   });
@@ -319,6 +343,16 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSeconds, setPlaybackSeconds] = useState(0);
   const [volume, setVolumeState] = useState(0.8);
+  const [audioPlaybackError, setAudioPlaybackError] = useState(false);
+  const [showDriveEmbedModal, setShowDriveEmbedModal] = useState(false);
+
+  const isGoogleDriveAudio = Boolean(
+    currentSermon?.audioUrl && 
+    (currentSermon.audioUrl.includes('drive.google.com') || currentSermon.audioUrl.includes('docs.google.com'))
+  );
+
+  const googleDriveEmbedUrl = isGoogleDriveAudio ? getGoogleDriveEmbedUrl(currentSermon?.audioUrl) : null;
+  const clearAudioError = useCallback(() => setAudioPlaybackError(false), []);
 
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
@@ -378,6 +412,7 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     const handleError = () => {
       console.warn('HTML5 Audio encountered loading error for:', audio.src);
+      setAudioPlaybackError(true);
       worshipPadEngine.play();
       worshipPadEngine.setVolume(volume);
     };
@@ -419,6 +454,7 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const playSermon = useCallback((sermon: Sermon) => {
     setCurrentSermon(sermon);
+    setAudioPlaybackError(false);
     setPlaybackSeconds(0);
     if (audioRef.current) {
       const playable = getPlayableAudioUrl(sermon.audioUrl);
@@ -999,6 +1035,12 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
         setVolume,
         skipForward,
         skipBackward,
+        audioPlaybackError,
+        clearAudioError,
+        isGoogleDriveAudio,
+        googleDriveEmbedUrl,
+        showDriveEmbedModal,
+        setShowDriveEmbedModal,
         isDarkMode,
         toggleDarkMode,
         sermons,

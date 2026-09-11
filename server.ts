@@ -1,10 +1,17 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Directory for directly uploaded audio files
+const UPLOADS_DIR = path.join(process.cwd(), 'public', 'audio_uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
 interface WhatsAppBroadcast {
   id: string;
@@ -33,8 +40,53 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  // Support up to 100MB audio payload for high quality sermon recordings
+  app.use(express.json({ limit: '100mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+
+  // Serve directly uploaded audio files with byte-range streaming support
+  app.use('/audio-uploads', express.static(UPLOADS_DIR, {
+    setHeaders: (res) => {
+      res.set('Accept-Ranges', 'bytes');
+      res.set('Access-Control-Allow-Origin', '*');
+      res.set('Cache-Control', 'public, max-age=86400');
+    }
+  }));
+
+  // Direct Audio File Upload Endpoint
+  app.post('/api/upload-audio', async (req, res) => {
+    try {
+      const { fileName, fileData, mimeType } = req.body;
+      if (!fileName || !fileData) {
+        return res.status(400).json({ ok: false, message: 'Missing fileName or fileData' });
+      }
+
+      // fileData can be raw base64 or data URL (e.g. data:audio/mp3;base64,...)
+      const base64Content = fileData.includes(';base64,')
+        ? fileData.split(';base64,')[1]
+        : fileData;
+
+      const buffer = Buffer.from(base64Content, 'base64');
+      const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const uniqueFileName = `${Date.now()}_${cleanName}`;
+      const targetPath = path.join(UPLOADS_DIR, uniqueFileName);
+
+      await fs.promises.writeFile(targetPath, buffer);
+      const publicUrl = `/audio-uploads/${uniqueFileName}`;
+
+      console.log(`✅ Audio uploaded successfully: ${uniqueFileName} (${(buffer.length / (1024 * 1024)).toFixed(2)} MB)`);
+      return res.json({
+        ok: true,
+        url: publicUrl,
+        fileName: uniqueFileName,
+        sizeBytes: buffer.length,
+        sizeMb: (buffer.length / (1024 * 1024)).toFixed(2)
+      });
+    } catch (err: any) {
+      console.error('Audio upload error:', err);
+      return res.status(500).json({ ok: false, message: err.message });
+    }
+  });
 
   // Health check API
   app.get('/api/health', (_req, res) => {
@@ -136,81 +188,223 @@ async function startServer() {
   // 5. Audio Proxy API (Bypasses Google Drive CORS & Virus Scan Confirmation Pages)
   app.get('/api/audio-proxy', async (req, res) => {
     try {
-      const rawUrl = req.query.url as string;
-      if (!rawUrl) {
-        return res.status(400).send('Missing audio url query parameter');
+      const rawUrl = (req.query.url as string) || '';
+      const queryFileId = req.query.fileId as string;
+      if (!rawUrl && !queryFileId) {
+        return res.status(400).send('Missing audio url or fileId query parameter');
       }
 
       let targetUrl = rawUrl.trim();
+      let fileId: string | null = queryFileId || null;
 
-      // If Google Drive link, convert to direct download URL
-      if (targetUrl.includes('drive.google.com') || targetUrl.includes('docs.google.com')) {
-        const fileIdMatch = targetUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || targetUrl.match(/id=([a-zA-Z0-9_-]+)/);
+      // Extract Google Drive File ID if applicable
+      if (!fileId && (targetUrl.includes('drive.google.com') || targetUrl.includes('docs.google.com'))) {
+        const fileIdMatch = targetUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || 
+                            targetUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/) ||
+                            targetUrl.match(/\/d\/([a-zA-Z0-9_-]+)/) ||
+                            targetUrl.match(/open\?id=([a-zA-Z0-9_-]+)/);
         if (fileIdMatch && fileIdMatch[1]) {
-          const fileId = fileIdMatch[1];
-          targetUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+          fileId = fileIdMatch[1];
         }
-      } else if (targetUrl.includes('dropbox.com')) {
-        targetUrl = targetUrl.replace('dl=0', 'dl=1').replace('www.dropbox.com', 'dl.dropboxusercontent.com');
+      }
+
+      const forwardHeaders: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': '*/*'
+      };
+
+      if (req.headers.range) {
+        forwardHeaders['Range'] = req.headers.range;
+      }
+
+      // If Google Drive, try Google's content download endpoints
+      if (fileId) {
+        const candidateUrls = [
+          `https://drive.usercontent.google.com/download?id=${fileId}&export=download&authuser=0`,
+          `https://docs.google.com/uc?export=download&id=${fileId}`,
+          `https://drive.google.com/uc?export=download&id=${fileId}`
+        ];
+
+        let driveSuccess = false;
+        for (const candidate of candidateUrls) {
+          try {
+            const resp = await fetch(candidate, {
+              headers: forwardHeaders,
+              redirect: 'follow'
+            });
+
+            const ct = resp.headers.get('content-type') || '';
+            
+            // If it's a virus scan warning HTML page, attempt confirmation token bypass
+            if (ct.includes('text/html')) {
+              const htmlText = await resp.text();
+              const confirmMatch = htmlText.match(/confirm=([a-zA-Z0-9_-]+)/) || 
+                                   htmlText.match(/download_warning[a-zA-Z0-9_]*=([a-zA-Z0-9_-]+)/);
+              if (confirmMatch && confirmMatch[1]) {
+                const bypassUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=${confirmMatch[1]}`;
+                const bypassResp = await fetch(bypassUrl, { headers: forwardHeaders, redirect: 'follow' });
+                const bypassCt = bypassResp.headers.get('content-type') || '';
+                if (!bypassCt.includes('text/html') && bypassResp.ok) {
+                  pipeAudioResponse(bypassResp, req, res);
+                  driveSuccess = true;
+                  break;
+                }
+              }
+              // If it's an HTML page (like Google Drive login or permission denied), skip to next candidate
+              continue;
+            }
+
+            if (resp.ok && !ct.includes('text/html')) {
+              pipeAudioResponse(resp, req, res);
+              driveSuccess = true;
+              break;
+            }
+          } catch (e) {
+            console.warn(`Drive candidate ${candidate} failed:`, e);
+          }
+        }
+
+        if (driveSuccess) return;
+
+        // If Google Drive direct streaming fails due to Google 2024 cookie/hotlink blocks or private permissions:
+        return res.status(422).json({
+          error: 'google_drive_streaming_blocked',
+          fileId,
+          embedUrl: `https://drive.google.com/file/d/${fileId}/preview`,
+          message: 'Google Drive blocked direct streaming for this file. Either the file permissions are Restricted (must be set to "Anyone with the link can view"), or Google is blocking hotlinked streaming. Please use the built-in Google Drive Player toggle or Dropbox.'
+        });
+      }
+
+      // Handle Dropbox links
+      if (targetUrl.includes('dropbox.com')) {
+        targetUrl = targetUrl
+          .replace('www.dropbox.com', 'dl.dropboxusercontent.com')
+          .replace('?dl=0', '?raw=1')
+          .replace('&dl=0', '&raw=1');
       }
 
       console.log('🔊 Fetching audio proxy target:', targetUrl);
 
-      let response = await fetch(targetUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        },
+      const response = await fetch(targetUrl, {
+        headers: forwardHeaders,
         redirect: 'follow'
       });
 
-      // Handle Google Drive virus scan warning HTML page if returned
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('text/html')) {
-        const htmlText = await response.text();
-        const confirmMatch = htmlText.match(/confirm=([a-zA-Z0-9_-]+)/) || htmlText.match(/download_warning[a-zA-Z0-9_]*=([a-zA-Z0-9_-]+)/);
-        if (confirmMatch && confirmMatch[1]) {
-          const confirmToken = confirmMatch[1];
-          const fileIdMatch = targetUrl.match(/id=([a-zA-Z0-9_-]+)/);
-          if (fileIdMatch && fileIdMatch[1]) {
-            const fileId = fileIdMatch[1];
-            const confirmUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=${confirmToken}`;
-            console.log('🔄 Google Drive virus warning confirmation bypass:', confirmUrl);
-            response = await fetch(confirmUrl, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-              },
-              redirect: 'follow'
-            });
-          }
-        }
+        return res.status(422).json({
+          error: 'invalid_audio_stream',
+          message: 'The provided URL returned a webpage (HTML) instead of an audio stream. Please provide a direct link to an MP3 file, or use Dropbox/Google Drive embed.'
+        });
       }
 
       if (!response.ok) {
-        console.error(`Audio proxy fetch failed with status ${response.status}`);
         return res.status(response.status).send(`Failed to fetch audio: ${response.statusText}`);
       }
 
-      const finalContentType = response.headers.get('content-type');
-      if (finalContentType && !finalContentType.includes('html')) {
-        res.setHeader('Content-Type', finalContentType);
-      } else {
-        res.setHeader('Content-Type', 'audio/mpeg');
-      }
-
-      const contentLength = response.headers.get('content-length');
-      if (contentLength) {
-        res.setHeader('Content-Length', contentLength);
-      }
-
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Accept-Ranges', 'bytes');
-
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      return res.send(buffer);
+      pipeAudioResponse(response, req, res);
     } catch (err: any) {
       console.error('Audio Proxy Error:', err);
-      return res.status(500).send('Error proxying audio');
+      return res.status(500).json({ error: 'internal_error', message: err.message });
+    }
+  });
+
+  // Helper to pipe audio stream with Range & 206 Partial Content support
+  async function pipeAudioResponse(upstreamResp: any, req: express.Request, res: express.Response) {
+    const contentType = upstreamResp.headers.get('content-type') || 'audio/mpeg';
+    const contentLength = upstreamResp.headers.get('content-length');
+    const contentRange = upstreamResp.headers.get('content-range');
+    const acceptRanges = upstreamResp.headers.get('accept-ranges') || 'bytes';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Accept-Ranges', acceptRanges);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    if (contentRange) {
+      res.setHeader('Content-Range', contentRange);
+      res.status(206);
+    } else if (upstreamResp.status === 206) {
+      res.status(206);
+    } else {
+      res.status(200);
+    }
+
+    if (contentLength) {
+      res.setHeader('Content-Length', contentLength);
+    }
+
+    if (upstreamResp.body) {
+      // Node 18+ Web Streams to Node Readable
+      const reader = upstreamResp.body.getReader();
+      const pump = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (res.writableEnded) break;
+            res.write(value);
+          }
+          res.end();
+        } catch (err) {
+          console.warn('Stream pump ended with err/abort:', err);
+          res.end();
+        }
+      };
+      req.on('close', () => {
+        reader.cancel().catch(() => {});
+      });
+      await pump();
+    } else {
+      const buf = Buffer.from(await upstreamResp.arrayBuffer());
+      res.send(buf);
+    }
+  }
+
+  // 6. Audio Link Diagnostic API
+  app.get('/api/audio-check', async (req, res) => {
+    try {
+      const url = (req.query.url as string || '').trim();
+      if (!url) {
+        return res.status(400).json({ ok: false, message: 'URL parameter required' });
+      }
+
+      let fileId: string | null = null;
+      if (url.includes('drive.google.com') || url.includes('docs.google.com')) {
+        const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if (match && match[1]) fileId = match[1];
+      }
+
+      if (fileId) {
+        return res.json({
+          ok: true,
+          provider: 'google_drive',
+          fileId,
+          embedUrl: `https://drive.google.com/file/d/${fileId}/preview`,
+          proxyUrl: `/api/audio-proxy?url=${encodeURIComponent(url)}&fileId=${fileId}`,
+          message: 'Google Drive link recognized! Ensure sharing is set to "Anyone with the link can view".',
+          recommendation: 'Both direct streaming and Google Drive Native Player embed are supported.'
+        });
+      }
+
+      if (url.includes('dropbox.com')) {
+        const directDropbox = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '?raw=1');
+        return res.json({
+          ok: true,
+          provider: 'dropbox',
+          directUrl: directDropbox,
+          message: 'Dropbox link recognized! Automatically converts to direct audio streaming format.',
+          recommendation: 'Ideal for fast, seeking-friendly playback on all devices.'
+        });
+      }
+
+      return res.json({
+        ok: true,
+        provider: 'direct',
+        url,
+        message: 'Direct audio URL received.'
+      });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err.message });
     }
   });
 

@@ -1,6 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useMinistry } from '../context/MinistryContext';
-import { Calendar, Clock, MapPin, Users, Flame, CheckCircle2, ChevronRight, Sparkles } from 'lucide-react';
+import { 
+  Calendar, 
+  Clock, 
+  MapPin, 
+  Users, 
+  Flame, 
+  CheckCircle2, 
+  ChevronRight, 
+  Sparkles,
+  BookOpen,
+  Heart,
+  ShieldCheck,
+  Sun,
+  Sunrise,
+  Layers,
+  Award
+} from 'lucide-react';
 
 interface EventsPageProps {
   onOpenBookingTab: () => void;
@@ -8,30 +24,220 @@ interface EventsPageProps {
 
 export const EventsPage: React.FC<EventsPageProps> = ({ onOpenBookingTab }) => {
   const { events, rsvpEvent, config } = useMinistry();
+  const [activeCategory, setActiveCategory] = useState<string>('All');
+
+  const categories = [
+    'All',
+    'Sunday Services',
+    'Weekly Services',
+    'Special Sunday Services',
+    'Ministers Fellowship',
+    'Monthly Programmes'
+  ];
+
+  const filteredServices = config.serviceTimes.filter(service => {
+    if (activeCategory === 'All') return true;
+    return service.category === activeCategory;
+  });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 space-y-16 text-left">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 space-y-16 sm:space-y-20 text-left">
       
       {/* Header Banner */}
       <div className="space-y-4 max-w-3xl">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
           <Calendar className="w-3.5 h-3.5" />
-          <span>Ministry Itinerary & Assemblies</span>
+          <span>Church Services, Itineraries & Programmes</span>
         </div>
         <h1 className="text-3xl sm:text-5xl font-serif-royal font-bold text-slate-900 dark:text-white leading-tight">
-          Upcoming Events & Conventions
+          Church Services & Programmes
         </h1>
-        <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed">
-          Mark your calendar for unforgettable encounters with the power of the Holy Ghost. Join Pastor Eghosa Best IGBINOVIA in Benin City and in apostolic meetings worldwide.
+        <p className="text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-relaxed font-serif-royal">
+          Champions of Grace Assembly, Incorporated, holds regular services, fellowships, prayer meetings, and special programmes throughout the month. These gatherings provide opportunities for worship, Bible teaching, prayer, spiritual growth, fellowship, and service.
         </p>
       </div>
 
-      {/* Featured Crusades & Conferences */}
-      <div className="space-y-8">
-        <h2 className="text-2xl font-serif-royal font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <Flame className="w-5 h-5 text-rose-600" />
-          <span>Major Crusades & Conferences</span>
-        </h2>
+      {/* ========================================================= */}
+      {/* CHURCH SERVICES & PROGRAMMES FULL SCHEDULE GRID           */}
+      {/* ========================================================= */}
+      <section className="space-y-8">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+          <div>
+            <span className="text-xs font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mb-1">
+              <Clock className="w-4 h-4" />
+              <span>Regular Assemblies & Encounters</span>
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-serif-royal font-bold text-slate-900 dark:text-white">
+              Official Schedule of Gatherings
+            </h2>
+          </div>
+
+          {/* Filter Pills */}
+          <div className="flex flex-wrap gap-2">
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  activeCategory === cat
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Detailed Service Cards Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {filteredServices.map((service, idx) => {
+            const isSunday = service.category === 'Sunday Services' || service.title.includes('Sunday Services');
+            const isCommunion = service.title.includes('Holy Communion');
+            const isFasting = service.title.includes('Psalm 91');
+            const isMinisters = service.title.includes('Ministers');
+
+            return (
+              <div
+                key={service.id || idx}
+                className={`rounded-3xl p-6 sm:p-8 bg-white dark:bg-[#0A2342] border transition-all duration-300 flex flex-col justify-between shadow-md hover:shadow-xl ${
+                  isSunday 
+                    ? 'border-amber-500/50 ring-1 ring-amber-500/30' 
+                    : isCommunion || isFasting
+                    ? 'border-rose-500/40'
+                    : 'border-slate-200 dark:border-slate-800'
+                }`}
+              >
+                <div className="space-y-5">
+                  {/* Badge & Timing Pill */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-rose-50 dark:bg-rose-950/80 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
+                        {service.category || 'Church Gathering'}
+                      </span>
+                      {service.badge && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-400/20 text-amber-800 dark:text-amber-300 border border-amber-400/30">
+                          {service.badge}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-lg">
+                      {service.frequency || service.day}
+                    </span>
+                  </div>
+
+                  {/* Title & Time Display */}
+                  <div>
+                    <h3 className="text-xl sm:text-2xl font-serif-royal font-bold text-slate-900 dark:text-white">
+                      {service.title}
+                    </h3>
+                    
+                    <div className="flex items-center gap-2 mt-2 text-base font-mono font-bold text-rose-600 dark:text-amber-400">
+                      <Clock className="w-4 h-4 text-amber-500" />
+                      <span>{service.time}</span>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {service.description}
+                  </p>
+
+                  {/* Detailed Sub-Schedule (for Sunday Services) */}
+                  {service.subServices && service.subServices.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 space-y-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Sunday Order of Services</span>
+                      </h4>
+
+                      <div className="space-y-2.5">
+                        {service.subServices.map((sub, sIdx) => (
+                          <div 
+                            key={sIdx}
+                            className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 text-xs space-y-1"
+                          >
+                            <div className="flex items-center justify-between font-serif-royal font-bold text-slate-900 dark:text-white">
+                              <div className="flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-amber-400/20 text-amber-800 dark:text-amber-300 flex items-center justify-center text-[10px]">
+                                  {sIdx + 1}
+                                </span>
+                                <span>{sub.title}</span>
+                              </div>
+                              <span className="font-mono text-rose-600 dark:text-amber-400 font-semibold text-[11px]">
+                                {sub.time}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400 pl-7 leading-relaxed">
+                              {sub.description}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Highlights for Specific Special Services */}
+                  {isCommunion && (
+                    <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 text-xs text-rose-800 dark:text-rose-300 flex items-start gap-2">
+                      <Award className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                      <span>Sacred celebration of Holy Communion, impartation of divine life, and apostolic anointing for fresh oil.</span>
+                    </div>
+                  )}
+
+                  {isFasting && (
+                    <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                      <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <span>Dedicated period for fasting, prayer, intercession, and seeking God’s intervention and protection under the shadow of the Almighty.</span>
+                    </div>
+                  )}
+
+                  {isMinisters && (
+                    <div className="p-3 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
+                      <Users className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                      <span>Dedicated in-house fellowship for ministers serving at Champions of Grace Assembly to seek God's direction and intercede.</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Card Footer */}
+                <div className="pt-6 mt-6 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <div className="flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                    <span>Grace Chapel Headquarters, Igue-Iheya</span>
+                  </div>
+
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{isMinisters ? 'Ministers Assembly' : 'All Are Welcome'}</span>
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ========================================================= */}
+      {/* FEATURED CRUSADES, CONFERENCES & SPECIAL VIGILS           */}
+      {/* ========================================================= */}
+      <div className="space-y-8 pt-6 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <span className="text-xs font-bold uppercase tracking-widest text-rose-600 dark:text-rose-400 flex items-center gap-1.5 mb-1">
+              <Flame className="w-4 h-4" />
+              <span>Conferences & Holy Ghost Encounters</span>
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-serif-royal font-bold text-slate-900 dark:text-white">
+              Conferences, Crusades & Vigils
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+              Specialized prophetic meetings, conventions, and international revivals with Pastor Best Eghosa.
+            </p>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {events.map(event => (
@@ -95,44 +301,6 @@ export const EventsPage: React.FC<EventsPageProps> = ({ onOpenBookingTab }) => {
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                   <span>Reserve Seat</span>
                 </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Weekly Service Times at Grace Chapel Headquarters */}
-      <div className="space-y-8">
-        <h2 className="text-2xl font-serif-royal font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <Clock className="w-5 h-5 text-amber-500" />
-          <span>Weekly Assemblies at Grace Chapel Headquarters</span>
-        </h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {config.serviceTimes.map((service, idx) => (
-            <div
-              key={idx}
-              className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3"
-            >
-              <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-400/20 text-amber-800 dark:text-amber-300 border border-amber-400/30 inline-block">
-                {service.day}
-              </span>
-
-              <h3 className="text-lg font-serif-royal font-bold text-slate-900 dark:text-white">
-                {service.title}
-              </h3>
-
-              <div className="text-sm font-mono font-bold text-rose-600 dark:text-amber-400">
-                {service.time}
-              </div>
-
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                {service.description}
-              </p>
-
-              <div className="pt-2 text-[11px] text-slate-400 flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-slate-400" />
-                <span>Grace Chapel, Igue-Iheya, Benin City</span>
               </div>
             </div>
           ))}

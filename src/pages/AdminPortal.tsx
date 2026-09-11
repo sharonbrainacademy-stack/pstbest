@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMinistry } from '../context/MinistryContext';
 import { 
   ShieldCheck, 
@@ -34,9 +34,20 @@ import {
   Volume2,
   X,
   Globe,
-  ArrowLeft
+  ArrowLeft,
+  Image as ImageIcon,
+  HelpCircle,
+  Play,
+  Pause,
+  CheckCircle2,
+  AlertTriangle,
+  Sparkles,
+  FileAudio
 } from 'lucide-react';
-import { Sermon, MinistryEvent, Book, WordCafeArticle, BookingRequest, AdminUser } from '../types';
+import { Sermon, MinistryEvent, Book, WordCafeArticle, BookingRequest, AdminUser, MinistryHeroBanner } from '../types';
+import { HomeBannerManager } from '../components/HomeBannerManager';
+import { analyzeAudioUrl, getPlayableAudioUrl, extractGoogleDriveFileId, getGoogleDriveEmbedUrl } from '../utils/audioUtils';
+import { AudioConversionModal } from '../components/AudioConversionModal';
 
 interface AdminPortalProps {
   setActiveTab?: (tab: string) => void;
@@ -110,7 +121,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
 
   // Active Admin Sub-Tab
   const [activeAdminTab, setActiveAdminTab] = useState<
-    'settings' | 'sermons' | 'events' | 'publications' | 'bookings' | 'prayers' | 'backup' | 'users' | 'whatsapp'
+    'settings' | 'banners' | 'sermons' | 'events' | 'publications' | 'bookings' | 'prayers' | 'backup' | 'users' | 'whatsapp'
   >('settings');
 
   // WhatsApp Broadcast Simulator State
@@ -120,6 +131,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
 
   // Website Settings Local Edit State
   const [settingsForm, setSettingsForm] = useState(config);
+
+  useEffect(() => {
+    setSettingsForm(config);
+  }, [config]);
 
   // New Sermon Modal / Form State
   const [showAddSermon, setShowAddSermon] = useState(false);
@@ -136,6 +151,80 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
     audioUrl: '',
     videoUrl: ''
   });
+
+  // Edit Sermon Modal / State
+  const [editingSermon, setEditingSermon] = useState<Sermon | null>(null);
+  const [sermonEditForm, setSermonEditForm] = useState<Sermon | null>(null);
+
+  // Audio Conversion Modal & Direct Audio Upload State
+  const [showMp3ConvertModal, setShowMp3ConvertModal] = useState(false);
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [uploadTarget, setUploadTarget] = useState<'sermonNew' | 'sermonEdit' | 'whatsapp' | 'tester'>('sermonNew');
+  const directAudioInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const handleDirectAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingAudio(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64Data = reader.result as string;
+          const res = await fetch('/api/upload-audio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileName: file.name,
+              fileData: base64Data,
+              mimeType: file.type || 'audio/mpeg'
+            })
+          });
+          const data = await res.json();
+          if (data.ok && data.url) {
+            showToast(`Audio uploaded successfully: ${file.name} (${data.sizeMb} MB)!`, 'success');
+            if (uploadTarget === 'sermonNew') {
+              setSermonForm(prev => ({ ...prev, audioUrl: data.url }));
+            } else if (uploadTarget === 'sermonEdit') {
+              setSermonEditForm(prev => prev ? ({ ...prev, audioUrl: data.url }) : null);
+            } else if (uploadTarget === 'whatsapp') {
+              setWaSimUrl(data.url);
+            } else {
+              setAudioTesterUrl(data.url);
+            }
+          } else {
+            throw new Error(data.message || 'Upload failed');
+          }
+        } catch (err: any) {
+          showToast(`Upload failed: ${err.message}`, 'error');
+        } finally {
+          setIsUploadingAudio(false);
+          if (directAudioInputRef.current) directAudioInputRef.current.value = '';
+        }
+      };
+      reader.onerror = () => {
+        showToast('Failed to read file from disk', 'error');
+        setIsUploadingAudio(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      showToast(`Upload error: ${err.message}`, 'error');
+      setIsUploadingAudio(false);
+    }
+  };
+
+  // Audio Tester State
+  const [audioTesterUrl, setAudioTesterUrl] = useState('');
+  const [isTestingAudio, setIsTestingAudio] = useState(false);
+  const [testAudioPlaying, setTestAudioPlaying] = useState(false);
+  const [audioTestFeedback, setAudioTestFeedback] = useState<{
+    ok: boolean;
+    provider: string;
+    message: string;
+    recommendation?: string;
+  } | null>(null);
+  const adminTestAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
   // New Event Modal / Form State
   const [showAddEvent, setShowAddEvent] = useState(false);
@@ -545,6 +634,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
       <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-200 dark:border-slate-800">
         {[
           { id: 'settings', label: 'Website Settings', icon: Settings },
+          { id: 'banners', label: `Home Top Banner (${(config.heroBanners || []).length || 1})`, icon: ImageIcon },
           { id: 'sermons', label: `Sermons (${sermons.length})`, icon: Headphones },
           { id: 'events', label: `Events (${events.length})`, icon: Calendar },
           { id: 'publications', label: 'Books & Word Café', icon: BookOpen },
@@ -574,10 +664,48 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
       </div>
 
       {/* ========================================================= */}
+      {/* TAB 0: HOME TOP BANNER & PICTURE MANAGER                 */}
+      {/* ========================================================= */}
+      {activeAdminTab === 'banners' && (
+        <HomeBannerManager />
+      )}
+
+      {/* ========================================================= */}
       {/* TAB 1: WEBSITE SETTINGS & BRAND COLOR CUSTOMIZATION      */}
       {/* ========================================================= */}
       {activeAdminTab === 'settings' && (
         <form onSubmit={handleSaveSettings} className="space-y-8">
+          
+          {/* Quick Access Card: Home Page Top Banner Picture */}
+          <div className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-12 rounded-xl overflow-hidden bg-slate-950 border border-amber-500/40 flex-shrink-0 shadow-inner">
+                <img
+                  src={config.heroImageUrl}
+                  alt="Top Banner Thumbnail"
+                  className="w-full h-full object-cover object-top"
+                />
+              </div>
+              <div>
+                <h4 className="font-serif-royal font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-amber-500" />
+                  <span>Home Page First Top Space Picture / Banner</span>
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Manage the flyer, portrait, or rotating carousel pictures at the top of the home page.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('banners')}
+              className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <span>Manage Top Banner</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
           
           {/* Brand Colors Customization with LIVE PREVIEW */}
           <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#0A2342] border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
@@ -694,6 +822,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                  Church / Ministry Legal Name
+                </label>
+                <input
+                  type="text"
+                  value={settingsForm.churchName}
+                  onChange={e => setSettingsForm({ ...settingsForm, churchName: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
                   Pastor Name
                 </label>
                 <input
@@ -703,7 +843,22 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:border-amber-500"
                 />
               </div>
+            </div>
 
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                Church Services & Programmes Overview Statement
+              </label>
+              <textarea
+                rows={2}
+                value={settingsForm.churchServicesOverview || ''}
+                onChange={e => setSettingsForm({ ...settingsForm, churchServicesOverview: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:border-amber-500"
+                placeholder="Champions of Grace Assembly, Incorporated, holds regular services, fellowships, prayer meetings..."
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
                   Ministry Motto
@@ -712,6 +867,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
                   type="text"
                   value={settingsForm.motto}
                   onChange={e => setSettingsForm({ ...settingsForm, motto: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                  Headquarters Address
+                </label>
+                <input
+                  type="text"
+                  value={settingsForm.branchHeadquarters}
+                  onChange={e => setSettingsForm({ ...settingsForm, branchHeadquarters: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -742,17 +909,125 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
                 />
               </div>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
-                Headquarters Address
-              </label>
-              <input
-                type="text"
-                value={settingsForm.branchHeadquarters}
-                onChange={e => setSettingsForm({ ...settingsForm, branchHeadquarters: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:border-amber-500"
-              />
+          {/* Church Services & Programmes Schedule Editor */}
+          <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#0A2342] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 dark:border-slate-800">
+              <div>
+                <h3 className="text-lg font-serif-royal font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-amber-500" />
+                  <span>Church Services & Programmes Schedule</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Update timings, frequencies, and service descriptions for Champions of Grace Assembly, Incorporated.
+                </p>
+              </div>
+
+              <span className="text-xs font-mono font-semibold px-3 py-1 bg-amber-400/20 text-amber-800 dark:text-amber-300 rounded-lg border border-amber-400/30">
+                {settingsForm.serviceTimes.length} Programmes Active
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              {settingsForm.serviceTimes.map((service, idx) => (
+                <div 
+                  key={service.id || idx}
+                  className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-3"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-amber-400">
+                      Programme #{idx + 1}: {service.category || 'Regular Gathering'}
+                    </span>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      {service.frequency || service.day}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+                        Service Title
+                      </label>
+                      <input
+                        type="text"
+                        value={service.title}
+                        onChange={e => {
+                          const updated = [...settingsForm.serviceTimes];
+                          updated[idx] = { ...updated[idx], title: e.target.value };
+                          setSettingsForm({ ...settingsForm, serviceTimes: updated });
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+                        Day / Frequency
+                      </label>
+                      <input
+                        type="text"
+                        value={service.frequency || service.day}
+                        onChange={e => {
+                          const updated = [...settingsForm.serviceTimes];
+                          updated[idx] = { ...updated[idx], day: e.target.value, frequency: e.target.value };
+                          setSettingsForm({ ...settingsForm, serviceTimes: updated });
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+                        Time
+                      </label>
+                      <input
+                        type="text"
+                        value={service.time}
+                        onChange={e => {
+                          const updated = [...settingsForm.serviceTimes];
+                          updated[idx] = { ...updated[idx], time: e.target.value };
+                          setSettingsForm({ ...settingsForm, serviceTimes: updated });
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono font-bold text-rose-600 dark:text-amber-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+                      Description & Spiritual Focus
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={service.description}
+                      onChange={e => {
+                        const updated = [...settingsForm.serviceTimes];
+                        updated[idx] = { ...updated[idx], description: e.target.value };
+                        setSettingsForm({ ...settingsForm, serviceTimes: updated });
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs leading-relaxed"
+                    />
+                  </div>
+
+                  {service.subServices && service.subServices.length > 0 && (
+                    <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 space-y-2">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                        Sub-Schedule Segments ({service.subServices.length})
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {service.subServices.map((sub, sIdx) => (
+                          <div key={sIdx} className="text-xs p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                            <div className="font-bold text-slate-900 dark:text-white">{sub.title}</div>
+                            <div className="font-mono text-[11px] text-amber-500 font-semibold">{sub.time}</div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">{sub.description}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -782,19 +1057,190 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
       {/* ========================================================= */}
       {activeAdminTab === 'sermons' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-serif-royal font-bold text-slate-900 dark:text-white">
-              Manage Sermons & Audio Teachings
-            </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-serif-royal font-bold text-slate-900 dark:text-white">
+                Manage Sermons & Audio Teachings
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Upload prophetic audio files, set scriptures, and connect Google Drive or Dropbox links.
+              </p>
+            </div>
 
             <button
-              onClick={() => setShowAddSermon(true)}
-              className="px-4 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-md flex items-center gap-2 hover:opacity-90"
+              onClick={() => {
+                setShowAddSermon(true);
+                setEditingSermon(null);
+              }}
+              className="px-4 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-md flex items-center gap-2 hover:opacity-90 self-start sm:self-auto"
               style={{ backgroundColor: config.primaryColor }}
             >
               <Plus className="w-4 h-4" />
               <span>Add New Sermon</span>
             </button>
+          </div>
+
+          {/* Audio Linking Procedure & Diagnostics Card */}
+          <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-500/30 dark:bg-amber-950/20 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/20 pb-3">
+              <div className="flex items-center gap-2.5 text-amber-900 dark:text-amber-300 font-bold text-sm">
+                <HelpCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                <span>Audio Streaming & Google Drive Guide</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMp3ConvertModal(true)}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 hover:bg-amber-400 transition-colors shadow-xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>How to Convert to MP3</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUploadTarget('tester');
+                    directAudioInputRef.current?.click();
+                  }}
+                  disabled={isUploadingAudio}
+                  className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-bold text-xs flex items-center gap-1.5 hover:opacity-90 transition-opacity shadow-xs"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{isUploadingAudio ? 'Uploading...' : 'Upload Audio Directly'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-700 dark:text-slate-300">
+              <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-amber-500/20 space-y-1">
+                <div className="font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                  <span className="w-4 h-4 rounded-full bg-amber-500 text-slate-950 text-[10px] flex items-center justify-center font-bold">1</span>
+                  Set Permissions
+                </div>
+                <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                  In Google Drive, right-click your MP3 &gt; <strong>Share</strong> &gt; set General Access to <strong>"Anyone with the link"</strong> (Viewer). If set to "Restricted", the link will fail!
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-amber-500/20 space-y-1">
+                <div className="font-bold text-sky-700 dark:text-sky-400 flex items-center gap-1.5">
+                  <span className="w-4 h-4 rounded-full bg-sky-500 text-white text-[10px] flex items-center justify-center font-bold">2</span>
+                  Copy & Paste Link
+                </div>
+                <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                  Click <strong>Copy link</strong> and paste it directly into the <em>Audio File URL</em> field. Our system automatically extracts the File ID and prepares direct audio streaming.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-amber-500/20 space-y-1">
+                <div className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                  <span className="w-4 h-4 rounded-full bg-emerald-500 text-white text-[10px] flex items-center justify-center font-bold">3</span>
+                  Dropbox or MP3 Alternative
+                </div>
+                <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                  For 100% instant seekable streaming, Dropbox links or direct <code>.mp3</code> URLs (Archive.org) stream directly without Google's anti-hotlinking limitations.
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Audio URL Tester */}
+            <div className="pt-2 border-t border-amber-500/20 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="relative flex-1">
+                <input
+                  type="url"
+                  value={audioTesterUrl}
+                  onChange={e => {
+                    setAudioTesterUrl(e.target.value);
+                    setAudioTestFeedback(null);
+                  }}
+                  placeholder="Paste any Google Drive or audio link to verify immediately..."
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={!audioTesterUrl.trim() || isTestingAudio}
+                  onClick={async () => {
+                    if (!audioTesterUrl.trim()) return;
+                    setIsTestingAudio(true);
+                    setAudioTestFeedback(null);
+                    try {
+                      const analysis = analyzeAudioUrl(audioTesterUrl);
+                      const res = await fetch(`/api/audio-check?url=${encodeURIComponent(audioTesterUrl)}`);
+                      const data = await res.json();
+                      setAudioTestFeedback({
+                        ok: data.ok,
+                        provider: analysis.provider,
+                        message: data.message || analysis.notes,
+                        recommendation: data.recommendation || analysis.recommendedAction
+                      });
+                    } catch (err: any) {
+                      const fallback = analyzeAudioUrl(audioTesterUrl);
+                      setAudioTestFeedback({
+                        ok: false,
+                        provider: fallback.provider,
+                        message: `Diagnostic check failed: ${err.message}`,
+                        recommendation: fallback.recommendedAction
+                      });
+                    } finally {
+                      setIsTestingAudio(false);
+                    }
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-400 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  {isTestingAudio ? 'Checking...' : 'Verify Link'}
+                </button>
+
+                {audioTesterUrl.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (testAudioPlaying && adminTestAudioRef.current) {
+                        adminTestAudioRef.current.pause();
+                        setTestAudioPlaying(false);
+                      } else {
+                        const playable = getPlayableAudioUrl(audioTesterUrl);
+                        if (!adminTestAudioRef.current) {
+                          adminTestAudioRef.current = new Audio();
+                        }
+                        adminTestAudioRef.current.src = playable;
+                        adminTestAudioRef.current.play()
+                          .then(() => setTestAudioPlaying(true))
+                          .catch((e) => {
+                            showToast(`Audio playback failed: ${e.message}. If Google Drive, ensure link is set to "Anyone with link".`, 'error');
+                            setTestAudioPlaying(false);
+                          });
+                        adminTestAudioRef.current.onended = () => setTestAudioPlaying(false);
+                      }
+                    }}
+                    className="px-3 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-bold text-xs flex items-center gap-1 hover:opacity-90 transition-opacity whitespace-nowrap"
+                  >
+                    {testAudioPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                    <span>{testAudioPlaying ? 'Pause Test' : 'Test Sound'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Test Results Display */}
+            {audioTestFeedback && (
+              <div className={`p-3 rounded-xl text-xs space-y-1 ${
+                audioTestFeedback.ok 
+                  ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30' 
+                  : 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/30'
+              }`}>
+                <div className="font-bold flex items-center gap-1.5">
+                  {audioTestFeedback.ok ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-rose-600" />}
+                  <span>Provider: {audioTestFeedback.provider.toUpperCase()}</span>
+                </div>
+                <p className="text-[11px]">{audioTestFeedback.message}</p>
+                {audioTestFeedback.recommendation && (
+                  <p className="text-[11px] opacity-90 font-medium">💡 Tip: {audioTestFeedback.recommendation}</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Add Sermon Form Modal */}
@@ -864,6 +1310,59 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
                   />
                 </div>
 
+                {/* Audio URL Input with Live Detection and Direct Upload */}
+                <div className="sm:col-span-2 space-y-2 p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/20">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Audio Source (Direct Server Upload, Google Drive, or MP3 Link)
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUploadTarget('sermonNew');
+                          directAudioInputRef.current?.click();
+                        }}
+                        disabled={isUploadingAudio}
+                        className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold text-[11px] flex items-center gap-1 hover:bg-amber-400 transition-colors"
+                      >
+                        <Upload className="w-3 h-3" />
+                        <span>{isUploadingAudio && uploadTarget === 'sermonNew' ? 'Uploading...' : 'Upload File'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowMp3ConvertModal(true)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-semibold text-[11px] flex items-center gap-1 hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors"
+                      >
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        <span>Convert to MP3</span>
+                      </button>
+                      {sermonForm.audioUrl && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                          {analyzeAudioUrl(sermonForm.audioUrl).provider.toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    type="url"
+                    value={sermonForm.audioUrl}
+                    onChange={e => setSermonForm({ ...sermonForm, audioUrl: e.target.value })}
+                    placeholder="https://drive.google.com/file/d/.../view?usp=sharing, or click 'Upload File'"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono text-slate-900 dark:text-white"
+                  />
+                  {sermonForm.audioUrl && sermonForm.audioUrl.startsWith('/audio-uploads/') ? (
+                    <div className="flex items-center justify-between text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                      <span>✅ Directly hosted on ministry server — ready for immediate high-speed streaming!</span>
+                      <audio controls src={sermonForm.audioUrl} className="h-6 w-48" />
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      💡 Tip: Click <strong>Upload File</strong> to upload MP3, M4A, or WAV straight from your computer or phone, or use <strong>Convert to MP3</strong> to fix WhatsApp voice notes.
+                    </p>
+                  )}
+                </div>
+
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Description</label>
                   <textarea
@@ -883,12 +1382,183 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
                     ...sermonForm,
                     audioUrl: sermonForm.audioUrl || 'https://cdn.pixabay.com/download/audio/2022/05/16/audio_c89b7e7c8e.mp3?filename=ambient-piano-amp-strings-10711.mp3'
                   });
+                  setSermonForm({
+                    title: '',
+                    scripture: '',
+                    series: '',
+                    duration: '1h 10m',
+                    durationSeconds: 4200,
+                    date: 'October 2026',
+                    preacher: 'Pastor Eghosa Best IGBINOVIA',
+                    category: 'Prophetic',
+                    description: '',
+                    audioUrl: '',
+                    videoUrl: ''
+                  });
                   setShowAddSermon(false);
+                  showToast('Sermon published successfully!', 'success');
                 }}
-                className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider"
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-emerald-500 transition-colors"
               >
                 Publish Sermon
               </button>
+            </div>
+          )}
+
+          {/* Edit Sermon Modal */}
+          {editingSermon && sermonEditForm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xl w-full p-6 space-y-4 text-left shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <h4 className="text-base font-serif-royal font-bold text-slate-900 dark:text-white">
+                    Edit Sermon Details & Audio URL
+                  </h4>
+                  <button
+                    onClick={() => {
+                      setEditingSermon(null);
+                      setSermonEditForm(null);
+                    }}
+                    className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Title</label>
+                    <input
+                      type="text"
+                      value={sermonEditForm.title}
+                      onChange={e => setSermonEditForm({ ...sermonEditForm, title: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Scripture</label>
+                    <input
+                      type="text"
+                      value={sermonEditForm.scripture}
+                      onChange={e => setSermonEditForm({ ...sermonEditForm, scripture: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Category</label>
+                    <select
+                      value={sermonEditForm.category}
+                      onChange={e => setSermonEditForm({ ...sermonEditForm, category: e.target.value as Sermon['category'] })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                    >
+                      <option value="Prophetic">Prophetic</option>
+                      <option value="Grace">Grace</option>
+                      <option value="Deliverance">Deliverance</option>
+                      <option value="Prayer">Prayer</option>
+                      <option value="Kingdom Wealth">Kingdom Wealth</option>
+                      <option value="Faith">Faith</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Duration</label>
+                    <input
+                      type="text"
+                      value={sermonEditForm.duration}
+                      onChange={e => setSermonEditForm({ ...sermonEditForm, duration: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                    />
+                  </div>
+
+                  {/* Audio URL in Edit Form */}
+                  <div className="sm:col-span-2 space-y-2 p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/20">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 text-xs">
+                        Audio Source (Direct Server Upload, Google Drive, or MP3 Link)
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUploadTarget('sermonEdit');
+                            directAudioInputRef.current?.click();
+                          }}
+                          disabled={isUploadingAudio}
+                          className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold text-[11px] flex items-center gap-1 hover:bg-amber-400 transition-colors"
+                        >
+                          <Upload className="w-3 h-3" />
+                          <span>{isUploadingAudio && uploadTarget === 'sermonEdit' ? 'Uploading...' : 'Upload File'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowMp3ConvertModal(true)}
+                          className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-semibold text-[11px] flex items-center gap-1 hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors"
+                        >
+                          <Sparkles className="w-3 h-3 text-amber-500" />
+                          <span>Convert to MP3</span>
+                        </button>
+                        {sermonEditForm.audioUrl && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                            {analyzeAudioUrl(sermonEditForm.audioUrl).provider.toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <input
+                      type="url"
+                      value={sermonEditForm.audioUrl || ''}
+                      onChange={e => setSermonEditForm({ ...sermonEditForm, audioUrl: e.target.value })}
+                      placeholder="https://drive.google.com/file/d/.../view?usp=sharing or click 'Upload File'"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono text-slate-900 dark:text-white"
+                    />
+                    {sermonEditForm.audioUrl && sermonEditForm.audioUrl.startsWith('/audio-uploads/') ? (
+                      <div className="flex items-center justify-between text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                        <span>✅ Directly hosted on ministry server — ready for immediate high-speed streaming!</span>
+                        <audio controls src={sermonEditForm.audioUrl} className="h-6 w-48" />
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        💡 Tip: Click <strong>Upload File</strong> to upload directly without Google Drive, or click <strong>Convert to MP3</strong> to convert WhatsApp audio.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Description</label>
+                    <textarea
+                      rows={2}
+                      value={sermonEditForm.description}
+                      onChange={e => setSermonEditForm({ ...sermonEditForm, description: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    onClick={() => {
+                      setEditingSermon(null);
+                      setSermonEditForm(null);
+                    }}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!sermonEditForm.title) return;
+                      updateSermon(editingSermon.id, sermonEditForm);
+                      setEditingSermon(null);
+                      setSermonEditForm(null);
+                      showToast('Sermon updated successfully!', 'success');
+                    }}
+                    className="px-5 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-emerald-500"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -899,32 +1569,57 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
                 <tr>
                   <th className="p-4">Title & Category</th>
                   <th className="p-4">Scripture</th>
+                  <th className="p-4">Audio Source</th>
                   <th className="p-4">Duration</th>
                   <th className="p-4">Plays</th>
                   <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {sermons.map(sermon => (
-                  <tr key={sermon.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
-                    <td className="p-4">
-                      <span className="font-bold text-slate-900 dark:text-white block">{sermon.title}</span>
-                      <span className="text-[10px] text-amber-600 dark:text-amber-400 uppercase font-semibold">{sermon.category}</span>
-                    </td>
-                    <td className="p-4 text-slate-600 dark:text-slate-300">{sermon.scripture}</td>
-                    <td className="p-4 font-mono">{sermon.duration}</td>
-                    <td className="p-4 font-mono">{sermon.playsCount.toLocaleString()}</td>
-                    <td className="p-4 text-right space-x-2">
-                      <button
-                        onClick={() => deleteSermon(sermon.id)}
-                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50"
-                        title="Delete sermon"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {sermons.map(sermon => {
+                  const audioAnalysis = analyzeAudioUrl(sermon.audioUrl);
+                  return (
+                    <tr key={sermon.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                      <td className="p-4">
+                        <span className="font-bold text-slate-900 dark:text-white block">{sermon.title}</span>
+                        <span className="text-[10px] text-amber-600 dark:text-amber-400 uppercase font-semibold">{sermon.category}</span>
+                      </td>
+                      <td className="p-4 text-slate-600 dark:text-slate-300">{sermon.scripture}</td>
+                      <td className="p-4">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          audioAnalysis.provider === 'google_drive'
+                            ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-800'
+                            : audioAnalysis.provider === 'dropbox'
+                            ? 'bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-800'
+                            : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                        }`}>
+                          {audioAnalysis.provider === 'google_drive' ? 'Google Drive' : audioAnalysis.provider === 'dropbox' ? 'Dropbox' : 'Direct Audio'}
+                        </span>
+                      </td>
+                      <td className="p-4 font-mono">{sermon.duration}</td>
+                      <td className="p-4 font-mono">{sermon.playsCount.toLocaleString()}</td>
+                      <td className="p-4 text-right space-x-1.5">
+                        <button
+                          onClick={() => {
+                            setEditingSermon(sermon);
+                            setSermonEditForm({ ...sermon });
+                          }}
+                          className="p-1.5 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/50"
+                          title="Edit sermon & audio link"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => deleteSermon(sermon.id)}
+                          className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50"
+                          title="Delete sermon"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1656,21 +2351,65 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">
-                    Audio File URL (Direct MP3 or Google Drive Link)
-                  </label>
+                <div className="space-y-2 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
+                      Audio Source (Direct Upload, Google Drive, or MP3 Link)
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUploadTarget('whatsapp');
+                          directAudioInputRef.current?.click();
+                        }}
+                        disabled={isUploadingAudio}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[11px] flex items-center gap-1 hover:bg-emerald-500 transition-colors"
+                      >
+                        <Upload className="w-3 h-3" />
+                        <span>{isUploadingAudio && uploadTarget === 'whatsapp' ? 'Uploading...' : 'Upload File'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowMp3ConvertModal(true)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-semibold text-[11px] flex items-center gap-1 hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors"
+                      >
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        <span>Convert to MP3</span>
+                      </button>
+                      {waSimUrl && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                          {analyzeAudioUrl(waSimUrl).provider.toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   <input
                     type="url"
                     required
                     value={waSimUrl}
                     onChange={e => setWaSimUrl(e.target.value)}
-                    placeholder="e.g. https://drive.google.com/file/d/.../view?usp=sharing"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-mono text-slate-900 dark:text-white"
+                    placeholder="e.g. https://drive.google.com/file/d/.../view?usp=sharing or click 'Upload File'"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono text-slate-900 dark:text-white"
                   />
-                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 font-medium">
-                    💡 <strong>Google Drive Tip:</strong> Ensure the file link sharing setting is set to <em>"Anyone with the link can view"</em>. Our server automatically proxies and streams the audio directly for visitors!
-                  </p>
+                  {waSimUrl && waSimUrl.startsWith('/audio-uploads/') ? (
+                    <div className="flex items-center justify-between text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                      <span>✅ Directly hosted on ministry server — ready to broadcast!</span>
+                      <audio controls src={waSimUrl} className="h-6 w-48" />
+                    </div>
+                  ) : waSimUrl ? (
+                    <p className={`text-[11px] font-medium ${
+                      analyzeAudioUrl(waSimUrl).provider === 'google_drive' 
+                        ? 'text-amber-600 dark:text-amber-400' 
+                        : 'text-emerald-600 dark:text-emerald-400'
+                    }`}>
+                      💡 {analyzeAudioUrl(waSimUrl).notes}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                      💡 <strong>WhatsApp Voice Note Tip:</strong> If your recording is in <code>.opus</code> or from iPhone, click <strong>Convert to MP3</strong> to convert it instantly, or upload directly!
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1740,6 +2479,33 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ setActiveTab }) => {
           </div>
         </div>
       )}
+
+      {/* Global Hidden Audio File Input for Direct Device Uploads */}
+      <input
+        ref={directAudioInputRef}
+        type="file"
+        accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.opus,.flac"
+        onChange={handleDirectAudioUpload}
+        className="hidden"
+      />
+
+      {/* Audio Conversion and Linking Guide Modal */}
+      <AudioConversionModal
+        isOpen={showMp3ConvertModal}
+        onClose={() => setShowMp3ConvertModal(false)}
+        onAudioUploaded={(uploadedUrl, fileName) => {
+          showToast(`Uploaded ${fileName} directly to website!`, 'success');
+          if (uploadTarget === 'sermonNew') {
+            setSermonForm(prev => ({ ...prev, audioUrl: uploadedUrl }));
+          } else if (uploadTarget === 'sermonEdit') {
+            setSermonEditForm(prev => prev ? ({ ...prev, audioUrl: uploadedUrl }) : null);
+          } else if (uploadTarget === 'whatsapp') {
+            setWaSimUrl(uploadedUrl);
+          } else {
+            setAudioTesterUrl(uploadedUrl);
+          }
+        }}
+      />
 
     </div>
   );

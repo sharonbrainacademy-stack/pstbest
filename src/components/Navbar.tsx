@@ -130,7 +130,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenP
                   </span>
                 </div>
                 <span className="text-[10px] sm:text-[11px] text-slate-600 dark:text-slate-300 font-medium truncate max-w-[180px] sm:max-w-xs">
-                  Champions of Grace Assembly, Inc.
+                  {config.churchName || 'Champions of Grace Assembly, Incorporated'}
                 </span>
               </div>
             </div>
