@@ -18,7 +18,9 @@ import {
   RefreshCw,
   Sliders,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Copy,
+  HelpCircle
 } from 'lucide-react';
 
 const PRESET_BANNERS = [
@@ -53,6 +55,7 @@ export const HomeBannerManager: React.FC = () => {
 
   // Add / Edit Multi-Banner Modal state
   const [showModal, setShowModal] = useState(false);
+  const [showDeployGuide, setShowDeployGuide] = useState(false);
   const [editingBannerId, setEditingBannerId] = useState<string | null>(null);
   const [bannerForm, setBannerForm] = useState<MinistryHeroBanner>({
     id: '',
@@ -256,9 +259,19 @@ export const HomeBannerManager: React.FC = () => {
       {/* Header Banner Explanation */}
       <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#0A2342] to-slate-900 text-white border border-amber-500/30 shadow-xl relative overflow-hidden">
         <div className="relative z-10 space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-amber-400 text-slate-950">
-            <ImageIcon className="w-3.5 h-3.5" />
-            <span>Home Page Top Space Manager</span>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-amber-400 text-slate-950">
+              <ImageIcon className="w-3.5 h-3.5" />
+              <span>Home Page Top Space Manager</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDeployGuide(!showDeployGuide)}
+              className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold flex items-center gap-2 transition-colors"
+            >
+              <HelpCircle className="w-4 h-4 text-amber-400" />
+              <span>{showDeployGuide ? 'Hide Netlify & GitHub Guide' : 'Why Banner Changes Need Code Sync on Netlify?'}</span>
+            </button>
           </div>
           <h3 className="text-xl sm:text-2xl font-serif-royal font-bold text-white">
             Top Banner & Picture Customization
@@ -268,6 +281,62 @@ export const HomeBannerManager: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* GitHub & Netlify Deployment Explanation Card */}
+      {showDeployGuide && (
+        <div className="p-6 rounded-3xl bg-amber-500/10 border border-amber-500/40 dark:bg-amber-950/20 space-y-4 text-left">
+          <div className="flex items-center justify-between border-b border-amber-500/30 pb-3">
+            <div className="flex items-center gap-2 text-amber-900 dark:text-amber-300 font-bold text-sm">
+              <Sparkles className="w-5 h-5 text-amber-500 shrink-0" />
+              <span>How Banners Work on GitHub & Netlify</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const codeSnippet = `heroImageUrl: '${config.heroImageUrl}',\nheroBanners: ${JSON.stringify(heroBanners, null, 2)}`;
+                navigator.clipboard.writeText(codeSnippet);
+                showToast('Banner code copied! Paste into src/data/initialData.ts', 'success');
+              }}
+              className="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 hover:bg-amber-400 transition-colors shadow-xs"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copy Banner Config for Git</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-700 dark:text-slate-300">
+            <div className="p-4 rounded-2xl bg-white/60 dark:bg-slate-900/60 border border-amber-500/20 space-y-2">
+              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-[10px]">1</span>
+                <span>Local Browser vs Netlify</span>
+              </div>
+              <p className="leading-relaxed text-slate-600 dark:text-slate-400">
+                When you change banners in this Admin Portal, changes are saved in your browser's <code>localStorage</code>. Netlify builds fresh from GitHub code in <code>src/data/initialData.ts</code>, where initial defaults reside.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/60 dark:bg-slate-900/60 border border-amber-500/20 space-y-2">
+              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-[10px]">2</span>
+                <span>Image Hotlink Protection</span>
+              </div>
+              <p className="leading-relaxed text-slate-600 dark:text-slate-400">
+                Certain free image hosts (PostImages, Imgur) block requests coming from Netlify domains unless <code>referrerPolicy="no-referrer"</code> is configured. We have added this attribute and an automatic fallback so your banners will not break.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/60 dark:bg-slate-900/60 border border-amber-500/20 space-y-2">
+              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-[10px]">3</span>
+                <span>Permanent GitHub Sync</span>
+              </div>
+              <p className="leading-relaxed text-slate-600 dark:text-slate-400">
+                To make any banner permanent for every visitor on Netlify without needing an Admin login, click <strong>Copy Banner Config for Git</strong> above, and save it in <code>src/data/initialData.ts</code>, or log into Admin on Netlify once.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SECTION 1: Primary Top Banner Quick Update */}
       <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#0A2342] border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
@@ -314,6 +383,8 @@ export const HomeBannerManager: React.FC = () => {
               <img
                 src={previewHeroUrl}
                 alt="Primary Top Banner Preview"
+                referrerPolicy="no-referrer"
+                crossOrigin="anonymous"
                 className="w-full h-48 sm:h-72 object-cover object-top transition-transform duration-500 group-hover:scale-[1.01]"
                 onError={() => showToast('Failed to load image preview. Please check URL.', 'error')}
               />
@@ -385,6 +456,8 @@ export const HomeBannerManager: React.FC = () => {
                 <img
                   src={preset.url}
                   alt={preset.name}
+                  referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
                   className="w-full h-20 object-cover rounded-lg mb-2 group-hover:opacity-90"
                 />
                 <span className="block text-xs font-bold text-slate-900 dark:text-white truncate">
@@ -441,6 +514,8 @@ export const HomeBannerManager: React.FC = () => {
                     <img
                       src={banner.imageUrl}
                       alt={banner.title || 'Banner Picture'}
+                      referrerPolicy="no-referrer"
+                      crossOrigin="anonymous"
                       className="w-full h-full object-cover object-top"
                     />
                     <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-white">
@@ -614,6 +689,8 @@ export const HomeBannerManager: React.FC = () => {
                   <img
                     src={bannerForm.imageUrl}
                     alt="Preview"
+                    referrerPolicy="no-referrer"
+                    crossOrigin="anonymous"
                     className="w-full h-full object-cover object-top"
                   />
                 </div>

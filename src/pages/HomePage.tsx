@@ -125,6 +125,15 @@ export const HomePage: React.FC<HomePageProps> = ({ setActiveTab, onOpenArticle,
             key={currentBanner?.id || currentBanner?.imageUrl || config.heroImageUrl}
             src={currentBanner?.imageUrl || config.heroImageUrl}
             alt={currentBanner?.title || "Pastor Eghosa Best IGBINOVIA Banner"}
+            referrerPolicy="no-referrer"
+            crossOrigin="anonymous"
+            onError={(e) => {
+              const target = e.currentTarget;
+              const fallback = 'https://images.unsplash.com/photo-1519791883288-dc8bd696e667?auto=format&fit=crop&w=2000&q=80';
+              if (target.src !== fallback) {
+                target.src = fallback;
+              }
+            }}
             className={`w-full h-auto max-h-[75vh] sm:max-h-[85vh] object-cover object-top transition-opacity duration-700 ${
               currentBanner?.linkUrl ? 'cursor-pointer' : ''
             }`}

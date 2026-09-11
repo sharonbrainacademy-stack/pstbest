@@ -46,6 +46,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ setActiveTab, onOpenPrayer
             <img
               src={config.aboutExecutiveImageUrl}
               alt="Pastor Eghosa Best IGBINOVIA"
+              referrerPolicy="no-referrer"
               className="w-full h-[460px] object-cover object-top"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-end p-6 text-white">
@@ -176,6 +177,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ setActiveTab, onOpenPrayer
               <img
                 src={config.pastorAndWifeImageUrl}
                 alt="Pastor Best Eghosa and Wife"
+                referrerPolicy="no-referrer"
                 className="w-full h-80 sm:h-96 object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-5 text-white">
