@@ -276,18 +276,17 @@ export const HomeBannerManager: React.FC = () => {
 
   // Delete Banner
   const handleDeleteBanner = (bannerId: string) => {
-    if (heroBanners.length <= 1) {
-      showToast('You must keep at least one banner picture for the home page.', 'warning');
-      return;
-    }
     const updated = heroBanners.filter(b => b.id !== bannerId);
+    const fallbackUrl = 'https://i.postimg.cc/1zJvWQv9/9623BAC8-75C6-4928-A7F8-8E2930DC25CD.jpg';
+    const primaryImg = updated.length > 0 ? updated[0].imageUrl : fallbackUrl;
+    
     updateConfig({
       heroBanners: updated,
-      heroImageUrl: updated[0].imageUrl
+      heroImageUrl: primaryImg
     });
-    setHeroInputUrl(updated[0].imageUrl);
-    setPreviewHeroUrl(updated[0].imageUrl);
-    showToast('Banner removed from home page.', 'info');
+    setHeroInputUrl(primaryImg);
+    setPreviewHeroUrl(primaryImg);
+    showToast('Banner picture deleted and updated live across all locations!', 'info');
   };
 
   // Toggle Active status
