@@ -367,8 +367,11 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
     if (!audio) return;
 
     const playable = getPlayableAudioUrl(currentSermon?.audioUrl);
+    const hasAudioSource = Boolean(
+      playable && (playable.startsWith('http') || playable.startsWith('/') || playable.startsWith('data:') || playable.startsWith('blob:'))
+    );
 
-    if (playable && playable.startsWith('http')) {
+    if (hasAudioSource) {
       if (audio.src !== playable) {
         audio.src = playable;
         audio.currentTime = 0;
@@ -378,7 +381,7 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
     audio.volume = volume;
 
     if (isPlaying) {
-      if (playable && playable.startsWith('http')) {
+      if (hasAudioSource) {
         audio.play().catch(err => {
           console.warn('Audio playback error, falling back to pad engine:', err);
           worshipPadEngine.play();
@@ -458,7 +461,7 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
     setPlaybackSeconds(0);
     if (audioRef.current) {
       const playable = getPlayableAudioUrl(sermon.audioUrl);
-      if (playable && playable.startsWith('http')) {
+      if (playable && (playable.startsWith('http') || playable.startsWith('/') || playable.startsWith('data:') || playable.startsWith('blob:'))) {
         audioRef.current.src = playable;
         audioRef.current.currentTime = 0;
       }
@@ -473,7 +476,8 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const seek = useCallback((seconds: number) => {
     setPlaybackSeconds(seconds);
-    if (audioRef.current && currentSermon?.audioUrl && currentSermon.audioUrl.startsWith('http')) {
+    const playable = getPlayableAudioUrl(currentSermon?.audioUrl);
+    if (audioRef.current && playable) {
       audioRef.current.currentTime = seconds;
     }
   }, [currentSermon]);
@@ -490,7 +494,8 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
     setPlaybackSeconds(prev => {
       const max = currentSermon?.durationSeconds || 3600;
       const target = Math.min(max, prev + 15);
-      if (audioRef.current && currentSermon?.audioUrl && currentSermon.audioUrl.startsWith('http')) {
+      const playable = getPlayableAudioUrl(currentSermon?.audioUrl);
+      if (audioRef.current && playable) {
         audioRef.current.currentTime = target;
       }
       return target;
@@ -500,7 +505,8 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
   const skipBackward = useCallback(() => {
     setPlaybackSeconds(prev => {
       const target = Math.max(0, prev - 15);
-      if (audioRef.current && currentSermon?.audioUrl && currentSermon.audioUrl.startsWith('http')) {
+      const playable = getPlayableAudioUrl(currentSermon?.audioUrl);
+      if (audioRef.current && playable) {
         audioRef.current.currentTime = target;
       }
       return target;
