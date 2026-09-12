@@ -126,11 +126,11 @@ export const HomePage: React.FC<HomePageProps> = ({ setActiveTab, onOpenArticle,
             src={currentBanner?.imageUrl || config.heroImageUrl}
             alt={currentBanner?.title || "Pastor Eghosa Best IGBINOVIA Banner"}
             referrerPolicy="no-referrer"
-            crossOrigin="anonymous"
             onError={(e) => {
               const target = e.currentTarget;
-              const fallback = 'https://images.unsplash.com/photo-1519791883288-dc8bd696e667?auto=format&fit=crop&w=2000&q=80';
-              if (target.src !== fallback) {
+              // Only fallback if the URL is completely unparseable or broken 404
+              const fallback = 'https://i.postimg.cc/1zJvWQv9/9623BAC8-75C6-4928-A7F8-8E2930DC25CD.jpg';
+              if (target.src !== fallback && !target.src.includes('postimg')) {
                 target.src = fallback;
               }
             }}
