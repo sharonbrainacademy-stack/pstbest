@@ -128,10 +128,10 @@ export const HomePage: React.FC<HomePageProps> = ({ setActiveTab, onOpenArticle,
             referrerPolicy="no-referrer"
             onError={(e) => {
               const target = e.currentTarget;
-              // Only fallback if the URL is completely unparseable or broken 404
-              const fallback = 'https://i.postimg.cc/1zJvWQv9/9623BAC8-75C6-4928-A7F8-8E2930DC25CD.jpg';
-              if (target.src !== fallback && !target.src.includes('postimg')) {
-                target.src = fallback;
+              if (!target.dataset.hasFailed) {
+                target.dataset.hasFailed = "true";
+                // High-reliability fallback image if user's custom URL is broken or 404
+                target.src = 'https://images.unsplash.com/photo-1544427920-c49ccfb85579?auto=format&fit=crop&w=1920&q=80';
               }
             }}
             className={`w-full h-auto max-h-[75vh] sm:max-h-[85vh] object-cover object-top transition-opacity duration-700 ${

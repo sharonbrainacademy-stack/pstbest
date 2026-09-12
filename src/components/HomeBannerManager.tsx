@@ -95,8 +95,8 @@ export const HomeBannerManager: React.FC = () => {
     }
   ];
 
-  // Helper to compress high-res phone photos using HTML5 Canvas
-  const compressImageFile = (file: File, maxDimension = 1920, quality = 0.82): Promise<string> => {
+  // Helper to compress high-res phone photos using HTML5 Canvas to lightweight ~80-120KB JPEG
+  const compressImageFile = (file: File, maxDimension = 1280, quality = 0.72): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
