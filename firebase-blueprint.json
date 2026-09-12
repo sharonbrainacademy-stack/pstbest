@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "MinistryConfig": {
+      "title": "Ministry Global Configuration",
+      "description": "Global ministry settings including hero banners, executive photos, theme colors, and sermons list.",
+      "type": "object",
+      "properties": {
+        "churchName": { "type": "string" },
+        "pastorName": { "type": "string" },
+        "motto": { "type": "string" },
+        "heroImageUrl": { "type": "string" },
+        "aboutExecutiveImageUrl": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "accentColor": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "Booking": {
+      "title": "Ministration Booking Request",
+      "description": "Booking request submitted by a visitor for Pastor Eghosa Best IGBINOVIA.",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "eventType": { "type": "string" },
+        "location": { "type": "string" },
+        "details": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["fullName", "email", "phone"]
+    },
+    "PrayerRequest": {
+      "title": "Prayer Request Submission",
+      "description": "Secret prayer request submitted by a church member or visitor.",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "requestText": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["fullName", "requestText"]
+    }
+  },
+  "firestore": {
+    "/config/ministryConfig": {
+      "schema": { "$ref": "#/entities/MinistryConfig" },
+      "description": "Global settings document synced across all devices worldwide"
+    },
+    "/bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/Booking" },
+      "description": "Ministration bookings submitted by visitors"
+    },
+    "/prayer_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/PrayerRequest" },
+      "description": "Prayer requests submitted by visitors"
+    }
+  }
+}

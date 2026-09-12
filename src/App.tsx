@@ -119,8 +119,8 @@ const MainAppLayout: React.FC = () => {
         onClose={() => setSelectedBook(null)}
       />
 
-      {/* Persistent Floating Worship Pad & Sermon Audio Player */}
-      <AudioPlayer />
+      {/* Persistent Floating Worship Pad & Sermon Audio Player removed as requested */}
+      {/* <AudioPlayer /> */}
 
       {/* WhatsApp Quick Prayer Channel Floating Trigger */}
       <FloatingWhatsApp />

@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Ministry Configuration (Banners, Photos, Settings, Sermons)
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Ministration Booking Submissions
+    match /bookings/{bookingId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // Secret Prayer Requests
+    match /prayer_requests/{requestId} {
+      allow read, create, update, delete: if true;
+    }
+  }
+}

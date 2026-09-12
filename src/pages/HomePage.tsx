@@ -340,7 +340,6 @@ export const HomePage: React.FC<HomePageProps> = ({ setActiveTab, onOpenArticle,
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {sermons.slice(0, 3).map(sermon => {
-              const isThisPlaying = currentSermon?.id === sermon.id && isPlaying;
               return (
                 <div
                   key={sermon.id}
@@ -371,35 +370,28 @@ export const HomePage: React.FC<HomePageProps> = ({ setActiveTab, onOpenArticle,
 
                   <div className="pt-5 mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-[11px] text-slate-600 dark:text-slate-300 font-medium">
-                      {sermon.playsCount.toLocaleString()} plays
+                      Audio Teaching
                     </span>
 
-                    <button
-                      onClick={() => {
-                        if (isThisPlaying) {
-                          togglePlay();
-                        } else {
-                          playSermon(sermon);
-                        }
-                      }}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all ${
-                        isThisPlaying
-                          ? 'bg-rose-600 text-white shadow-md'
-                          : 'bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 hover:text-white text-slate-800 dark:text-slate-200'
-                      }`}
-                    >
-                      {isThisPlaying ? (
-                        <>
-                          <Pause className="w-3.5 h-3.5 fill-current" />
-                          <span>Pause</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Listen</span>
-                        </>
-                      )}
-                    </button>
+                    {sermon.audioUrl ? (
+                      <a
+                        href={sermon.audioUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 hover:text-white text-slate-800 dark:text-slate-200 transition-all"
+                      >
+                        <span>Open Audio</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </a>
+                    ) : (
+                      <button
+                        onClick={() => setActiveTab('sermons')}
+                        className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 hover:text-white text-slate-800 dark:text-slate-200 transition-all"
+                      >
+                        <span>View Details</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );

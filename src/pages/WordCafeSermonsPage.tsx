@@ -4,8 +4,7 @@ import { WordCafeArticle, Sermon } from '../types';
 import { 
   Coffee, 
   Headphones, 
-  Play, 
-  Pause, 
+  ExternalLink,
   Search, 
   Sparkles, 
   ChevronRight, 
@@ -23,10 +22,6 @@ export const WordCafeSermonsPage: React.FC<WordCafeSermonsPageProps> = ({ onOpen
   const { 
     sermons, 
     articles, 
-    playSermon, 
-    currentSermon, 
-    isPlaying, 
-    togglePlay, 
     config 
   } = useMinistry();
 
@@ -149,17 +144,10 @@ export const WordCafeSermonsPage: React.FC<WordCafeSermonsPageProps> = ({ onOpen
           {/* Sermons Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredSermons.map(sermon => {
-              const isCurrent = currentSermon?.id === sermon.id;
-              const isThisPlaying = isCurrent && isPlaying;
-
               return (
                 <div
                   key={sermon.id}
-                  className={`rounded-2xl p-6 border transition-all duration-300 flex flex-col justify-between group ${
-                    isCurrent
-                      ? 'border-amber-500 bg-amber-50/20 dark:bg-amber-950/20 shadow-lg ring-1 ring-amber-500/50'
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs hover:shadow-md'
-                  }`}
+                  className="rounded-2xl p-6 border transition-all duration-300 flex flex-col justify-between group bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs hover:shadow-md"
                 >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -191,35 +179,24 @@ export const WordCafeSermonsPage: React.FC<WordCafeSermonsPageProps> = ({ onOpen
 
                   <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <div className="text-xs text-slate-400">
-                      <span className="font-bold text-slate-600 dark:text-slate-300">{sermon.playsCount.toLocaleString()}</span> plays
+                      <span className="font-bold text-slate-600 dark:text-slate-300">Sermon Recording</span>
                     </div>
 
-                    <button
-                      onClick={() => {
-                        if (isThisPlaying) {
-                          togglePlay();
-                        } else {
-                          playSermon(sermon);
-                        }
-                      }}
-                      className={`px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all ${
-                        isThisPlaying
-                          ? 'bg-rose-600 text-white shadow-md ring-2 ring-rose-400'
-                          : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950 hover:opacity-90 active:scale-95'
-                      }`}
-                    >
-                      {isThisPlaying ? (
-                        <>
-                          <Pause className="w-3.5 h-3.5 fill-current" />
-                          <span>Pause Audio</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Play Sermon</span>
-                        </>
-                      )}
-                    </button>
+                    {sermon.audioUrl ? (
+                      <a
+                        href={sermon.audioUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-950 hover:opacity-90 transition-all"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Open Sermon Link</span>
+                      </a>
+                    ) : (
+                      <span className="px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500">
+                        Audio Available
+                      </span>
+                    )}
                   </div>
                 </div>
               );

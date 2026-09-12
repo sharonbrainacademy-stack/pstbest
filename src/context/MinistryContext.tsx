@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { getPlayableAudioUrl, getGoogleDriveEmbedUrl, extractGoogleDriveFileId } from '../utils/audioUtils';
+import { getPlayableAudioUrl, getGoogleDriveEmbedUrl, extractGoogleDriveFileId, getDirectGoogleDriveStreamUrl } from '../utils/audioUtils';
+import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { 
   MinistryConfig, 
   Sermon, 
@@ -22,7 +24,6 @@ import {
   PROPHETIC_SCRIPTURES, 
   INITIAL_ADMIN_USERS 
 } from '../data/initialData';
-import { worshipPadEngine } from '../utils/audioSynth';
 
 export interface ToastMessage {
   id: string;
@@ -359,43 +360,39 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
   useEffect(() => {
     if (typeof window !== 'undefined' && !audioRef.current) {
       audioRef.current = new Audio();
+      audioRef.current.preload = 'metadata';
     }
   }, []);
 
+  // Update volume & pause state without triggering illegal unprompted autoplay
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const playable = getPlayableAudioUrl(currentSermon?.audioUrl);
-    const hasAudioSource = Boolean(
-      playable && (playable.startsWith('http') || playable.startsWith('/') || playable.startsWith('data:') || playable.startsWith('blob:'))
-    );
-
-    if (hasAudioSource) {
-      if (audio.src !== playable) {
-        audio.src = playable;
-        audio.currentTime = 0;
-      }
-    }
-
     audio.volume = volume;
 
-    if (isPlaying) {
-      if (hasAudioSource) {
-        audio.play().catch(err => {
-          console.warn('Audio playback error, falling back to pad engine:', err);
-          worshipPadEngine.play();
-          worshipPadEngine.setVolume(volume);
-        });
-      } else {
-        worshipPadEngine.play();
-        worshipPadEngine.setVolume(volume);
-      }
-    } else {
+    if (!isPlaying) {
       audio.pause();
-      worshipPadEngine.stop();
     }
-  }, [isPlaying, currentSermon, volume]);
+
+    // Media Session API for phone lockscreen & Bluetooth controls
+    if (typeof window !== 'undefined' && 'mediaSession' in navigator && currentSermon) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: currentSermon.title,
+          artist: currentSermon.preacher,
+          album: config.motto || 'Champions of Grace Assembly',
+          artwork: [
+            { src: '/icon.png', sizes: '512x512', type: 'image/png' }
+          ]
+        });
+        navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
+        navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
+      } catch (e) {
+        /* ignore mediaSession setup errors on old devices */
+      }
+    }
+  }, [isPlaying, currentSermon, volume, config.motto]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -410,14 +407,14 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
     const handleEnded = () => {
       setIsPlaying(false);
       setPlaybackSeconds(0);
-      worshipPadEngine.stop();
     };
 
     const handleError = () => {
-      console.warn('HTML5 Audio encountered loading error for:', audio.src);
-      setAudioPlaybackError(true);
-      worshipPadEngine.play();
-      worshipPadEngine.setVolume(volume);
+      if (audio.src && audio.src !== window.location.href) {
+        console.warn('HTML5 Audio encountered loading error for:', audio.src);
+        setAudioPlaybackError(true);
+        setIsPlaying(false);
+      }
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -429,9 +426,9 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [volume]);
+  }, []);
 
-  // Audio timer fallback for ambient synth mode when no direct MP3 link is present
+  // Audio timer fallback for playback duration when direct MP3 link is playing
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     const playable = getPlayableAudioUrl(currentSermon?.audioUrl);
@@ -442,7 +439,6 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
           const maxSec = currentSermon.durationSeconds || 3600;
           if (prev >= maxSec) {
             setIsPlaying(false);
-            worshipPadEngine.stop();
             return 0;
           }
           return prev + 1;
@@ -459,20 +455,115 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
     setCurrentSermon(sermon);
     setAudioPlaybackError(false);
     setPlaybackSeconds(0);
-    if (audioRef.current) {
+
+    const audio = audioRef.current || (typeof window !== 'undefined' ? new Audio() : null);
+    if (audio) {
+      audioRef.current = audio;
       const playable = getPlayableAudioUrl(sermon.audioUrl);
+      const isDrive = sermon.audioUrl && (sermon.audioUrl.includes('drive.google.com') || sermon.audioUrl.includes('docs.google.com'));
+
       if (playable && (playable.startsWith('http') || playable.startsWith('/') || playable.startsWith('data:') || playable.startsWith('blob:'))) {
-        audioRef.current.src = playable;
-        audioRef.current.currentTime = 0;
+        try {
+          const fullTargetUrl = new URL(playable, window.location.href).href;
+          if (audio.src !== fullTargetUrl) {
+            audio.src = fullTargetUrl;
+          }
+        } catch {
+          if (audio.src !== playable) {
+            audio.src = playable;
+          }
+        }
+        audio.currentTime = 0;
+        audio.volume = volume;
+
+        // Start playback synchronously inside the user click handler
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+              setAudioPlaybackError(false);
+            })
+            .catch(err => {
+              console.warn('Direct play error:', err);
+              if (isDrive) {
+                const driveId = extractGoogleDriveFileId(sermon.audioUrl);
+                if (driveId) {
+                  const directDriveUrl = getDirectGoogleDriveStreamUrl(driveId);
+                  audio.src = directDriveUrl;
+                  audio.play()
+                    .then(() => {
+                      setIsPlaying(true);
+                      setAudioPlaybackError(false);
+                    })
+                    .catch(secondErr => {
+                      console.warn('Secondary Drive stream failed:', secondErr);
+                      setAudioPlaybackError(true);
+                      setIsPlaying(false);
+                    });
+                  return;
+                }
+              }
+              setAudioPlaybackError(true);
+              setIsPlaying(false);
+            });
+        } else {
+          setIsPlaying(true);
+        }
+      } else {
+        setIsPlaying(true);
       }
+    } else {
+      setIsPlaying(true);
     }
-    setIsPlaying(true);
-    setSermons(prev => prev.map(s => s.id === sermon.id ? { ...s, playsCount: s.playsCount + 1 } : s));
-  }, []);
+
+    setSermons(prev => prev.map(s => s.id === sermon.id ? { ...s, playsCount: (s.playsCount || 0) + 1 } : s));
+  }, [volume]);
 
   const togglePlay = useCallback(() => {
-    setIsPlaying(prev => !prev);
-  }, []);
+    const audio = audioRef.current;
+    if (!audio) {
+      setIsPlaying(prev => !prev);
+      return;
+    }
+
+    if (isPlaying) {
+      audio.pause();
+      setIsPlaying(false);
+    } else {
+      setAudioPlaybackError(false);
+      const playable = getPlayableAudioUrl(currentSermon?.audioUrl);
+      if (playable) {
+        try {
+          const fullTargetUrl = new URL(playable, window.location.href).href;
+          if (audio.src !== fullTargetUrl) {
+            audio.src = fullTargetUrl;
+          }
+        } catch {
+          if (audio.src !== playable) {
+            audio.src = playable;
+          }
+        }
+      }
+
+      audio.volume = volume;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsPlaying(true);
+            setAudioPlaybackError(false);
+          })
+          .catch(err => {
+            console.warn('Toggle play error:', err);
+            setAudioPlaybackError(true);
+            setIsPlaying(false);
+          });
+      } else {
+        setIsPlaying(true);
+      }
+    }
+  }, [isPlaying, currentSermon, volume]);
 
   const seek = useCallback((seconds: number) => {
     setPlaybackSeconds(seconds);
@@ -487,7 +578,6 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
     if (audioRef.current) {
       audioRef.current.volume = val;
     }
-    worshipPadEngine.setVolume(val);
   }, []);
 
   const skipForward = useCallback(() => {
@@ -834,35 +924,125 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
     localStorage.setItem(`${STORAGE_KEY}_prayer`, JSON.stringify(prayerRequests));
   }, [prayerRequests]);
 
-  // Operations
+  // Firestore Real-Time Cloud Listener
+  useEffect(() => {
+    // 1. Sync Ministry Global Settings & Banners
+    const unsubConfig = onSnapshot(
+      doc(db, 'config', 'ministryConfig'),
+      (snap) => {
+        if (snap.exists()) {
+          const remoteConfig = snap.data() as MinistryConfig;
+          setConfig(prev => ({ ...prev, ...remoteConfig }));
+        } else {
+          setDoc(doc(db, 'config', 'ministryConfig'), INITIAL_CONFIG).catch((err) =>
+            handleFirestoreError(err, OperationType.WRITE, 'config/ministryConfig')
+          );
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'config/ministryConfig')
+    );
+
+    // 2. Sync Sermons Library
+    const unsubSermons = onSnapshot(
+      doc(db, 'config', 'sermons'),
+      (snap) => {
+        if (snap.exists() && Array.isArray(snap.data().list)) {
+          setSermons(snap.data().list);
+        } else {
+          setDoc(doc(db, 'config', 'sermons'), { list: INITIAL_SERMONS }).catch((err) =>
+            handleFirestoreError(err, OperationType.WRITE, 'config/sermons')
+          );
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'config/sermons')
+    );
+
+    // 3. Sync Ministration Bookings
+    const unsubBookings = onSnapshot(
+      doc(db, 'config', 'bookings'),
+      (snap) => {
+        if (snap.exists() && Array.isArray(snap.data().list)) {
+          setBookingRequests(snap.data().list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'config/bookings')
+    );
+
+    // 4. Sync Prayer Requests
+    const unsubPrayers = onSnapshot(
+      doc(db, 'config', 'prayers'),
+      (snap) => {
+        if (snap.exists() && Array.isArray(snap.data().list)) {
+          setPrayerRequests(snap.data().list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'config/prayers')
+    );
+
+    return () => {
+      unsubConfig();
+      unsubSermons();
+      unsubBookings();
+      unsubPrayers();
+    };
+  }, []);
+
+  // Operations with Real-Time Cloud Sync
   const updateConfig = useCallback((newConfig: Partial<MinistryConfig>) => {
-    setConfig(prev => ({ ...prev, ...newConfig }));
-    showToast('Ministry website settings updated successfully!', 'success');
+    setConfig(prev => {
+      const updated = { ...prev, ...newConfig };
+      setDoc(doc(db, 'config', 'ministryConfig'), updated, { merge: true }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/ministryConfig')
+      );
+      return updated;
+    });
+    showToast('Ministry website settings updated globally across all devices!', 'success');
   }, [showToast]);
 
   const resetConfig = useCallback(() => {
     setConfig(INITIAL_CONFIG);
+    setDoc(doc(db, 'config', 'ministryConfig'), INITIAL_CONFIG).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, 'config/ministryConfig')
+    );
     showToast('Settings restored to default presets.', 'info');
   }, [showToast]);
 
-  // Sermons CRUD
+  // Sermons CRUD with Cloud Sync
   const addSermon = useCallback((s: Omit<Sermon, 'id' | 'playsCount'>) => {
     const newSermon: Sermon = {
       ...s,
       id: `sermon-${Date.now()}`,
       playsCount: 0
     };
-    setSermons(prev => [newSermon, ...prev]);
-    showToast(`"${s.title}" added to sermon library.`, 'success');
+    setSermons(prev => {
+      const updated = [newSermon, ...prev];
+      setDoc(doc(db, 'config', 'sermons'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/sermons')
+      );
+      return updated;
+    });
+    showToast(`"${s.title}" added to sermon library and synced worldwide!`, 'success');
   }, [showToast]);
 
   const updateSermon = useCallback((id: string, s: Partial<Sermon>) => {
-    setSermons(prev => prev.map(item => item.id === id ? { ...item, ...s } : item));
-    showToast('Sermon updated successfully.', 'success');
+    setSermons(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, ...s } : item);
+      setDoc(doc(db, 'config', 'sermons'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/sermons')
+      );
+      return updated;
+    });
+    showToast('Sermon updated and synced globally.', 'success');
   }, [showToast]);
 
   const deleteSermon = useCallback((id: string) => {
-    setSermons(prev => prev.filter(item => item.id !== id));
+    setSermons(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      setDoc(doc(db, 'config', 'sermons'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/sermons')
+      );
+      return updated;
+    });
     showToast('Sermon deleted.', 'info');
   }, [showToast]);
 

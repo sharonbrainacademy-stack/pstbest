@@ -54,13 +54,10 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenP
           <div className="flex items-center gap-2 sm:gap-3">
             {/* 1. Listen to Sermon */}
             <button
-              onClick={() => {
-                if (!isPlaying && togglePlay) togglePlay();
-                handleNavClick('sermons');
-              }}
+              onClick={() => handleNavClick('sermons')}
               className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-400/20 hover:bg-amber-400/35 text-amber-200 hover:text-white font-bold transition-all border border-amber-400/50 text-[11px] whitespace-nowrap"
             >
-              <Headphones className="w-3 h-3 text-amber-300 animate-pulse shrink-0" />
+              <Headphones className="w-3 h-3 text-amber-300 shrink-0" />
               <span>Listen to Sermon</span>
             </button>
 

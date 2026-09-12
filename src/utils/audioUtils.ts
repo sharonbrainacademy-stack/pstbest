@@ -49,16 +49,30 @@ export function getGoogleDriveEmbedUrl(url: string | undefined | null): string |
 }
 
 /**
+ * Returns a direct client-side streamable Google Drive URL
+ */
+export function getDirectGoogleDriveStreamUrl(fileId: string): string {
+  if (!fileId) return '';
+  return `https://docs.google.com/uc?export=download&id=${fileId}`;
+}
+
+/**
  * Transforms external audio links into direct playable audio streaming URLs.
  */
 export function getPlayableAudioUrl(url: string | undefined | null): string {
   if (!url) return '';
   let cleaned = url.trim();
 
-  // 1. Google Drive view/share link conversion via server proxy
+  // Handle data URLs or local blob URLs directly
+  if (cleaned.startsWith('data:') || cleaned.startsWith('blob:')) {
+    return cleaned;
+  }
+
+  // 1. Google Drive view/share link conversion via server proxy or direct stream URL
   if (cleaned.includes('drive.google.com') || cleaned.includes('docs.google.com')) {
     const fileId = extractGoogleDriveFileId(cleaned);
     if (fileId) {
+      // If running on local server with proxy support:
       return `/api/audio-proxy?url=${encodeURIComponent(cleaned)}&fileId=${fileId}`;
     }
     return `/api/audio-proxy?url=${encodeURIComponent(cleaned)}`;
@@ -66,7 +80,6 @@ export function getPlayableAudioUrl(url: string | undefined | null): string {
 
   // 2. Dropbox share link conversion (Direct client streaming with ?raw=1)
   if (cleaned.includes('dropbox.com')) {
-    // Dropbox can stream directly without server proxy by changing dl=0 to raw=1 and using dl.dropboxusercontent.com
     let directDropbox = cleaned
       .replace('www.dropbox.com', 'dl.dropboxusercontent.com')
       .replace('?dl=0', '?raw=1')

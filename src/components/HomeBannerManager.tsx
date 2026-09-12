@@ -53,6 +53,22 @@ export const HomeBannerManager: React.FC = () => {
   const [heroInputUrl, setHeroInputUrl] = useState(config.heroImageUrl || '');
   const [previewHeroUrl, setPreviewHeroUrl] = useState(config.heroImageUrl || '');
 
+  // Local state for all other ministry banners
+  const [aboutExecutiveUrl, setAboutExecutiveUrl] = useState(config.aboutExecutiveImageUrl || '');
+  const [pastorAndWifeUrl, setPastorAndWifeUrl] = useState(config.pastorAndWifeImageUrl || '');
+  const [wordCafeUrl, setWordCafeUrl] = useState(config.wordCafeBannerUrl || '');
+  const [announcementText, setAnnouncementText] = useState(config.announcementBanner || '');
+
+  // Sync state when config updates from Firestore
+  React.useEffect(() => {
+    setHeroInputUrl(config.heroImageUrl || '');
+    setPreviewHeroUrl(config.heroImageUrl || '');
+    setAboutExecutiveUrl(config.aboutExecutiveImageUrl || '');
+    setPastorAndWifeUrl(config.pastorAndWifeImageUrl || '');
+    setWordCafeUrl(config.wordCafeBannerUrl || '');
+    setAnnouncementText(config.announcementBanner || '');
+  }, [config]);
+
   // Add / Edit Multi-Banner Modal state
   const [showModal, setShowModal] = useState(false);
   const [showDeployGuide, setShowDeployGuide] = useState(false);
@@ -315,6 +331,43 @@ export const HomeBannerManager: React.FC = () => {
     setHeroInputUrl(banner.imageUrl);
     setPreviewHeroUrl(banner.imageUrl);
     showToast(`"${banner.title || 'Selected banner'}" set as primary home page banner!`, 'success');
+  };
+
+  // Handlers for updating other site banners
+  const handleSaveAboutExecutive = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!aboutExecutiveUrl.trim()) {
+      showToast('Please provide an image URL or upload a file for Executive Portrait.', 'warning');
+      return;
+    }
+    updateConfig({ aboutExecutiveImageUrl: aboutExecutiveUrl.trim() });
+    showToast('Pastor Best Executive Portrait Banner updated and synced globally!', 'success');
+  };
+
+  const handleSavePastorAndWife = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!pastorAndWifeUrl.trim()) {
+      showToast('Please provide an image URL or upload a file for Pastoral Couple Banner.', 'warning');
+      return;
+    }
+    updateConfig({ pastorAndWifeImageUrl: pastorAndWifeUrl.trim() });
+    showToast('Pastor & Wife Pastoral Partnership Banner updated and synced globally!', 'success');
+  };
+
+  const handleSaveWordCafe = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!wordCafeUrl.trim()) {
+      showToast('Please provide an image URL or upload a file for Word Café Header Banner.', 'warning');
+      return;
+    }
+    updateConfig({ wordCafeBannerUrl: wordCafeUrl.trim() });
+    showToast('Word Café Header Banner updated and synced globally!', 'success');
+  };
+
+  const handleSaveAnnouncement = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    updateConfig({ announcementBanner: announcementText });
+    showToast('Top Announcement Marquee Ticker updated and synced globally!', 'success');
   };
 
   return (
@@ -693,7 +746,313 @@ export const HomeBannerManager: React.FC = () => {
         </div>
       </div>
 
-      {/* SECTION 3: ADD / EDIT BANNER MODAL */}
+      {/* SECTION 3: Pastor Best Official Executive Portrait Banner */}
+      <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#0A2342] border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 dark:border-slate-800">
+          <div>
+            <h4 className="text-lg font-serif-royal font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <ImageIcon className="w-4 h-4 text-amber-500" />
+              <span>Pastor Best Official Executive Portrait Banner</span>
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Displayed prominently on the About Pastor Best Page, Biography section, and Leader Profile card.
+            </p>
+          </div>
+
+          <label className="cursor-pointer px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2 self-start sm:self-auto">
+            <Upload className="w-4 h-4 text-amber-500" />
+            <span>Upload from Device</span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleDeviceImageUpload(e, (url) => {
+                setAboutExecutiveUrl(url);
+                updateConfig({ aboutExecutiveImageUrl: url });
+                showToast('Executive Portrait updated and saved!', 'success');
+              })}
+            />
+          </label>
+        </div>
+
+        {/* Live Visual Preview */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+            <span>About Page Executive Photo Preview</span>
+            <span className="text-emerald-500 font-mono flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Active on About Page
+            </span>
+          </div>
+
+          <div className="relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-amber-500/30 shadow-inner h-64 sm:h-80 w-full sm:w-64">
+            {aboutExecutiveUrl ? (
+              <img
+                src={aboutExecutiveUrl}
+                alt="Executive Portrait Preview"
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover object-top"
+                onError={() => showToast('Failed to load image preview. Please check URL.', 'error')}
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-500 text-xs p-4 text-center">
+                No portrait picture configured
+              </div>
+            )}
+            <div className="absolute bottom-2 left-2 right-2 p-2 rounded-xl bg-black/75 backdrop-blur-md text-white text-[11px] font-bold truncate">
+              PST BEST EGHOSA Executive Portrait
+            </div>
+          </div>
+        </div>
+
+        {/* URL Input Form */}
+        <form onSubmit={handleSaveAboutExecutive} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+              Executive Portrait Image URL or Base64 Data
+            </label>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <input
+                type="text"
+                required
+                value={aboutExecutiveUrl}
+                onChange={e => setAboutExecutiveUrl(e.target.value)}
+                placeholder="Paste image link e.g. https://... or upload from your device"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs sm:text-sm font-mono focus:outline-none focus:border-amber-500 text-slate-900 dark:text-white"
+              />
+              <button
+                type="submit"
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-md flex items-center justify-center gap-2 hover:opacity-95 whitespace-nowrap"
+                style={{ backgroundColor: config.primaryColor }}
+              >
+                <Save className="w-4 h-4" />
+                <span>Save Portrait</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      {/* SECTION 4: First Family / Pastor Best & Wife Pastoral Partnership Banner */}
+      <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#0A2342] border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 dark:border-slate-800">
+          <div>
+            <h4 className="text-lg font-serif-royal font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <ImageIcon className="w-4 h-4 text-rose-500" />
+              <span>Pastor Best & Wife (First Family & Pastoral Couple) Banner</span>
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Displayed in the Family Life & Pastoral Partnership section of the About Page.
+            </p>
+          </div>
+
+          <label className="cursor-pointer px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2 self-start sm:self-auto">
+            <Upload className="w-4 h-4 text-amber-500" />
+            <span>Upload from Device</span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleDeviceImageUpload(e, (url) => {
+                setPastorAndWifeUrl(url);
+                updateConfig({ pastorAndWifeImageUrl: url });
+                showToast('Pastor & Wife Banner updated and saved!', 'success');
+              })}
+            />
+          </label>
+        </div>
+
+        {/* Live Visual Preview */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+            <span>Pastoral Couple Photo Preview</span>
+            <span className="text-emerald-500 font-mono flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Active on Family & Partnership Section
+            </span>
+          </div>
+
+          <div className="relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-rose-500/30 shadow-inner h-64 sm:h-80 w-full sm:w-96">
+            {pastorAndWifeUrl ? (
+              <img
+                src={pastorAndWifeUrl}
+                alt="Pastor and Wife Banner Preview"
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover object-top"
+                onError={() => showToast('Failed to load image preview. Please check URL.', 'error')}
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-500 text-xs p-4 text-center">
+                No family picture configured
+              </div>
+            )}
+            <div className="absolute bottom-2 left-2 right-2 p-2 rounded-xl bg-black/75 backdrop-blur-md text-white text-[11px] font-bold truncate">
+              Pastor & Wife — Co-Laborers in Grace
+            </div>
+          </div>
+        </div>
+
+        {/* URL Input Form */}
+        <form onSubmit={handleSavePastorAndWife} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+              Pastor & Wife Banner Image URL or Base64 Data
+            </label>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <input
+                type="text"
+                required
+                value={pastorAndWifeUrl}
+                onChange={e => setPastorAndWifeUrl(e.target.value)}
+                placeholder="Paste image link e.g. https://... or upload from your device"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs sm:text-sm font-mono focus:outline-none focus:border-amber-500 text-slate-900 dark:text-white"
+              />
+              <button
+                type="submit"
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-md flex items-center justify-center gap-2 hover:opacity-95 whitespace-nowrap"
+                style={{ backgroundColor: config.primaryColor }}
+              >
+                <Save className="w-4 h-4" />
+                <span>Save Family Photo</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      {/* SECTION 5: Word Café & Audio Teachings Header Banner */}
+      <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#0A2342] border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 dark:border-slate-800">
+          <div>
+            <h4 className="text-lg font-serif-royal font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <ImageIcon className="w-4 h-4 text-emerald-500" />
+              <span>Word Café & Sermons Library Header Banner</span>
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Displayed as the top hero background banner of the Word Café & Audio Teachings page.
+            </p>
+          </div>
+
+          <label className="cursor-pointer px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2 self-start sm:self-auto">
+            <Upload className="w-4 h-4 text-amber-500" />
+            <span>Upload from Device</span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleDeviceImageUpload(e, (url) => {
+                setWordCafeUrl(url);
+                updateConfig({ wordCafeBannerUrl: url });
+                showToast('Word Café Banner updated and saved!', 'success');
+              })}
+            />
+          </label>
+        </div>
+
+        {/* Live Visual Preview */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+            <span>Word Café Header Banner Preview</span>
+            <span className="text-emerald-500 font-mono flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Active on Word Café Page
+            </span>
+          </div>
+
+          <div className="relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-emerald-500/30 shadow-inner h-48 sm:h-60 w-full">
+            {wordCafeUrl ? (
+              <img
+                src={wordCafeUrl}
+                alt="Word Cafe Banner Preview"
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover object-center filter brightness-60"
+                onError={() => showToast('Failed to load image preview. Please check URL.', 'error')}
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-500 text-xs p-4 text-center">
+                No Word Café banner configured
+              </div>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-r from-[#0A2342]/90 via-black/40 to-transparent flex flex-col justify-end p-6 text-white">
+              <span className="text-xs font-bold uppercase tracking-widest text-amber-400">
+                Word Café Header Banner
+              </span>
+              <span className="text-lg font-serif-royal font-bold text-white">
+                Sip. Study. Soak. Transform.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* URL Input Form */}
+        <form onSubmit={handleSaveWordCafe} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+              Word Café Header Image URL or Base64 Data
+            </label>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <input
+                type="text"
+                required
+                value={wordCafeUrl}
+                onChange={e => setWordCafeUrl(e.target.value)}
+                placeholder="Paste image link e.g. https://... or upload from your device"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs sm:text-sm font-mono focus:outline-none focus:border-amber-500 text-slate-900 dark:text-white"
+              />
+              <button
+                type="submit"
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-md flex items-center justify-center gap-2 hover:opacity-95 whitespace-nowrap"
+                style={{ backgroundColor: config.primaryColor }}
+              >
+                <Save className="w-4 h-4" />
+                <span>Save Header Banner</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      {/* SECTION 6: Top Announcement Marquee Ticker Banner */}
+      <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#0A2342] border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 dark:border-slate-800">
+          <div>
+            <h4 className="text-lg font-serif-royal font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <span>Top Website Announcement Marquee Ticker</span>
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              The scrolling announcement text displayed at the top bar across the entire website.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveAnnouncement} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+              Announcement Message
+            </label>
+            <textarea
+              rows={2}
+              required
+              value={announcementText}
+              onChange={e => setAnnouncementText(e.target.value)}
+              placeholder="e.g. Welcome to PST BEST EGHOSA official portal. Join our live Sunday Service..."
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs sm:text-sm focus:outline-none focus:border-amber-500 text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="px-6 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-md flex items-center gap-2 hover:opacity-95"
+              style={{ backgroundColor: config.primaryColor }}
+            >
+              <Save className="w-4 h-4" />
+              <span>Save Announcement</span>
+            </button>
+          </div>
+        </form>
+      </div>
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
           <div className="bg-white dark:bg-[#0A2342] border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 sm:p-8 space-y-6">
