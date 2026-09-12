@@ -79,31 +79,95 @@ export const HomeBannerManager: React.FC = () => {
     }
   ];
 
+  // Helper to compress high-res phone photos using HTML5 Canvas
+  const compressImageFile = (file: File, maxDimension = 1920, quality = 0.82): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const rawUrl = e.target?.result as string;
+        if (!rawUrl) {
+          reject(new Error('Failed to read file'));
+          return;
+        }
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(rawUrl);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedDataUrl);
+        };
+        img.onerror = () => resolve(rawUrl);
+        img.src = rawUrl;
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  };
+
   // Handle uploading image from user's device (phone, laptop, tablet)
-  const handleDeviceImageUpload = (
+  const handleDeviceImageUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
-    onComplete: (url: string) => void
+    onComplete: (url: string) => void,
+    autoSavePrimary = false
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('Selected image file is larger than 5MB. Please choose an optimized image.', 'warning');
-      return;
-    }
+    showToast('Optimizing & processing image from device...', 'info');
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        onComplete(dataUrl);
-        showToast('Image uploaded from device successfully!', 'success');
+    try {
+      const compressedUrl = await compressImageFile(file);
+      onComplete(compressedUrl);
+
+      if (autoSavePrimary) {
+        setHeroInputUrl(compressedUrl);
+        setPreviewHeroUrl(compressedUrl);
+
+        const updatedBanners = [...heroBanners];
+        if (updatedBanners.length > 0) {
+          updatedBanners[0] = {
+            ...updatedBanners[0],
+            imageUrl: compressedUrl
+          };
+        } else {
+          updatedBanners.push({
+            id: `banner-${Date.now()}`,
+            imageUrl: compressedUrl,
+            title: config.pastorName,
+            subtitle: config.churchName,
+            isActive: true
+          });
+        }
+
+        updateConfig({
+          heroImageUrl: compressedUrl,
+          heroBanners: updatedBanners
+        });
+        showToast('Top banner picture uploaded and saved successfully!', 'success');
+      } else {
+        showToast('Image uploaded and optimized from device!', 'success');
       }
-    };
-    reader.onerror = () => {
-      showToast('Failed to read image file from device.', 'error');
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Image upload error:', err);
+      showToast('Failed to read image file from device. Please try another image.', 'error');
+    }
   };
 
   // Save Primary Hero Banner Image
@@ -362,7 +426,7 @@ export const HomeBannerManager: React.FC = () => {
                 onChange={(e) => handleDeviceImageUpload(e, (url) => {
                   setHeroInputUrl(url);
                   setPreviewHeroUrl(url);
-                })}
+                }, true)}
               />
             </label>
           </div>
@@ -384,7 +448,6 @@ export const HomeBannerManager: React.FC = () => {
                 src={previewHeroUrl}
                 alt="Primary Top Banner Preview"
                 referrerPolicy="no-referrer"
-                crossOrigin="anonymous"
                 className="w-full h-48 sm:h-72 object-cover object-top transition-transform duration-500 group-hover:scale-[1.01]"
                 onError={() => showToast('Failed to load image preview. Please check URL.', 'error')}
               />
@@ -457,7 +520,6 @@ export const HomeBannerManager: React.FC = () => {
                   src={preset.url}
                   alt={preset.name}
                   referrerPolicy="no-referrer"
-                  crossOrigin="anonymous"
                   className="w-full h-20 object-cover rounded-lg mb-2 group-hover:opacity-90"
                 />
                 <span className="block text-xs font-bold text-slate-900 dark:text-white truncate">
@@ -515,7 +577,6 @@ export const HomeBannerManager: React.FC = () => {
                       src={banner.imageUrl}
                       alt={banner.title || 'Banner Picture'}
                       referrerPolicy="no-referrer"
-                      crossOrigin="anonymous"
                       className="w-full h-full object-cover object-top"
                     />
                     <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-white">
@@ -690,7 +751,6 @@ export const HomeBannerManager: React.FC = () => {
                     src={bannerForm.imageUrl}
                     alt="Preview"
                     referrerPolicy="no-referrer"
-                    crossOrigin="anonymous"
                     className="w-full h-full object-cover object-top"
                   />
                 </div>
