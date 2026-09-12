@@ -779,7 +779,13 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
       createdAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     };
 
-    setAdminUsers(prev => [...prev, newUser]);
+    setAdminUsers(prev => {
+      const updated = [...prev, newUser];
+      setDoc(doc(db, 'config', 'adminUsers'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/adminUsers')
+      );
+      return updated;
+    });
     return { 
       success: true, 
       message: `Admin email ${trimmed} registered successfully! The user will be prompted to create their password on first sign in.` 
@@ -787,15 +793,21 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [adminUsers, currentAdminUser]);
 
   const deleteAdminUser = useCallback((userId: string) => {
-    setAdminUsers(prev => prev.filter(u => {
-      if (u.id === userId) {
-        if (u.email.toLowerCase() === 'pstbesteghosa@gmail.com' || u.role === 'Super Admin') {
-          return true; // Protect Super Admin from deletion
+    setAdminUsers(prev => {
+      const updated = prev.filter(u => {
+        if (u.id === userId) {
+          if (u.email.toLowerCase() === 'pstbesteghosa@gmail.com' || u.role === 'Super Admin') {
+            return true; // Protect Super Admin from deletion
+          }
+          return false;
         }
-        return false;
-      }
-      return true;
-    }));
+        return true;
+      });
+      setDoc(doc(db, 'config', 'adminUsers'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/adminUsers')
+      );
+      return updated;
+    });
   }, []);
 
   const setFirstTimePassword = useCallback((email: string, newPassword: string) => {
@@ -812,7 +824,13 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
       lastLogin: 'Just now'
     };
 
-    setAdminUsers(prev => prev.map((u, i) => i === userIndex ? updatedUser : u));
+    setAdminUsers(prev => {
+      const updated = prev.map((u, i) => i === userIndex ? updatedUser : u);
+      setDoc(doc(db, 'config', 'adminUsers'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/adminUsers')
+      );
+      return updated;
+    });
     setIsAdminLoggedIn(true);
     setCurrentAdminUser(updatedUser);
     localStorage.setItem(ADMIN_SESSION_KEY, 'true');
@@ -888,7 +906,13 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, []);
 
   const updateAdminRole = useCallback((userId: string, role: AdminUser['role']) => {
-    setAdminUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
+    setAdminUsers(prev => {
+      const updated = prev.map(u => u.id === userId ? { ...u, role } : u);
+      setDoc(doc(db, 'config', 'adminUsers'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/adminUsers')
+      );
+      return updated;
+    });
   }, []);
 
   // Persistence helpers
@@ -924,9 +948,9 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
     localStorage.setItem(`${STORAGE_KEY}_prayer`, JSON.stringify(prayerRequests));
   }, [prayerRequests]);
 
-  // Firestore Real-Time Cloud Listener
+  // Firestore Real-Time Cloud Listeners for ALL collections
   useEffect(() => {
-    // 1. Sync Ministry Global Settings & Banners
+    // 1. Sync Ministry Global Settings, Pictures & Banners
     const unsubConfig = onSnapshot(
       doc(db, 'config', 'ministryConfig'),
       (snap) => {
@@ -957,7 +981,52 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
       (err) => handleFirestoreError(err, OperationType.GET, 'config/sermons')
     );
 
-    // 3. Sync Ministration Bookings
+    // 3. Sync Word Cafe Articles
+    const unsubArticles = onSnapshot(
+      doc(db, 'config', 'articles'),
+      (snap) => {
+        if (snap.exists() && Array.isArray(snap.data().list)) {
+          setArticles(snap.data().list);
+        } else {
+          setDoc(doc(db, 'config', 'articles'), { list: INITIAL_WORD_CAFE_ARTICLES }).catch((err) =>
+            handleFirestoreError(err, OperationType.WRITE, 'config/articles')
+          );
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'config/articles')
+    );
+
+    // 4. Sync Books Catalog
+    const unsubBooks = onSnapshot(
+      doc(db, 'config', 'books'),
+      (snap) => {
+        if (snap.exists() && Array.isArray(snap.data().list)) {
+          setBooks(snap.data().list);
+        } else {
+          setDoc(doc(db, 'config', 'books'), { list: INITIAL_BOOKS }).catch((err) =>
+            handleFirestoreError(err, OperationType.WRITE, 'config/books')
+          );
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'config/books')
+    );
+
+    // 5. Sync Events & Itinerary
+    const unsubEvents = onSnapshot(
+      doc(db, 'config', 'events'),
+      (snap) => {
+        if (snap.exists() && Array.isArray(snap.data().list)) {
+          setEvents(snap.data().list);
+        } else {
+          setDoc(doc(db, 'config', 'events'), { list: INITIAL_EVENTS }).catch((err) =>
+            handleFirestoreError(err, OperationType.WRITE, 'config/events')
+          );
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'config/events')
+    );
+
+    // 6. Sync Ministration Bookings
     const unsubBookings = onSnapshot(
       doc(db, 'config', 'bookings'),
       (snap) => {
@@ -968,7 +1037,7 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
       (err) => handleFirestoreError(err, OperationType.GET, 'config/bookings')
     );
 
-    // 4. Sync Prayer Requests
+    // 7. Sync Secret Prayer Requests
     const unsubPrayers = onSnapshot(
       doc(db, 'config', 'prayers'),
       (snap) => {
@@ -979,11 +1048,38 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
       (err) => handleFirestoreError(err, OperationType.GET, 'config/prayers')
     );
 
+    // 8. Sync Giving Records
+    const unsubGiving = onSnapshot(
+      doc(db, 'config', 'giving'),
+      (snap) => {
+        if (snap.exists() && Array.isArray(snap.data().list)) {
+          setGivingRecords(snap.data().list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'config/giving')
+    );
+
+    // 9. Sync Admin Users
+    const unsubAdminUsers = onSnapshot(
+      doc(db, 'config', 'adminUsers'),
+      (snap) => {
+        if (snap.exists() && Array.isArray(snap.data().list)) {
+          setAdminUsers(snap.data().list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'config/adminUsers')
+    );
+
     return () => {
       unsubConfig();
       unsubSermons();
+      unsubArticles();
+      unsubBooks();
+      unsubEvents();
       unsubBookings();
       unsubPrayers();
+      unsubGiving();
+      unsubAdminUsers();
     };
   }, []);
 
@@ -1046,73 +1142,133 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
     showToast('Sermon deleted.', 'info');
   }, [showToast]);
 
-  // Articles CRUD
+  // Articles CRUD with Cloud Sync
   const addArticle = useCallback((a: Omit<WordCafeArticle, 'id'>) => {
     const newArt: WordCafeArticle = {
       ...a,
       id: `article-${Date.now()}`
     };
-    setArticles(prev => [newArt, ...prev]);
-    showToast(`Word Café article "${a.title}" published!`, 'success');
+    setArticles(prev => {
+      const updated = [newArt, ...prev];
+      setDoc(doc(db, 'config', 'articles'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/articles')
+      );
+      return updated;
+    });
+    showToast(`Word Café article "${a.title}" published and synced!`, 'success');
   }, [showToast]);
 
   const updateArticle = useCallback((id: string, a: Partial<WordCafeArticle>) => {
-    setArticles(prev => prev.map(item => item.id === id ? { ...item, ...a } : item));
-    showToast('Word Café teaching updated.', 'success');
+    setArticles(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, ...a } : item);
+      setDoc(doc(db, 'config', 'articles'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/articles')
+      );
+      return updated;
+    });
+    showToast('Word Café teaching updated and synced globally.', 'success');
   }, [showToast]);
 
   const deleteArticle = useCallback((id: string) => {
-    setArticles(prev => prev.filter(item => item.id !== id));
+    setArticles(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      setDoc(doc(db, 'config', 'articles'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/articles')
+      );
+      return updated;
+    });
     showToast('Word Café article deleted.', 'info');
   }, [showToast]);
 
-  // Books CRUD
+  // Books CRUD with Cloud Sync
   const addBook = useCallback((b: Omit<Book, 'id'>) => {
     const newBook: Book = {
       ...b,
       id: `book-${Date.now()}`
     };
-    setBooks(prev => [...prev, newBook]);
-    showToast(`Book "${b.title}" added to publication catalog!`, 'success');
+    setBooks(prev => {
+      const updated = [...prev, newBook];
+      setDoc(doc(db, 'config', 'books'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/books')
+      );
+      return updated;
+    });
+    showToast(`Book "${b.title}" added to publication catalog and synced!`, 'success');
   }, [showToast]);
 
   const updateBook = useCallback((id: string, b: Partial<Book>) => {
-    setBooks(prev => prev.map(item => item.id === id ? { ...item, ...b } : item));
-    showToast('Book details updated.', 'success');
+    setBooks(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, ...b } : item);
+      setDoc(doc(db, 'config', 'books'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/books')
+      );
+      return updated;
+    });
+    showToast('Book details updated and synced globally.', 'success');
   }, [showToast]);
 
   const deleteBook = useCallback((id: string) => {
-    setBooks(prev => prev.filter(item => item.id !== id));
+    setBooks(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      setDoc(doc(db, 'config', 'books'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/books')
+      );
+      return updated;
+    });
     showToast('Book removed.', 'info');
   }, [showToast]);
 
-  // Events CRUD
+  // Events CRUD with Cloud Sync
   const addEvent = useCallback((e: Omit<MinistryEvent, 'id' | 'rsvpCount'>) => {
     const newEvent: MinistryEvent = {
       ...e,
       id: `event-${Date.now()}`,
       rsvpCount: 0
     };
-    setEvents(prev => [...prev, newEvent]);
-    showToast(`Event "${e.title}" published!`, 'success');
+    setEvents(prev => {
+      const updated = [...prev, newEvent];
+      setDoc(doc(db, 'config', 'events'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/events')
+      );
+      return updated;
+    });
+    showToast(`Event "${e.title}" published and synced globally!`, 'success');
   }, [showToast]);
 
   const updateEvent = useCallback((id: string, e: Partial<MinistryEvent>) => {
-    setEvents(prev => prev.map(item => item.id === id ? { ...item, ...e } : item));
-    showToast('Event updated.', 'success');
+    setEvents(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, ...e } : item);
+      setDoc(doc(db, 'config', 'events'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/events')
+      );
+      return updated;
+    });
+    showToast('Event updated and synced globally.', 'success');
   }, [showToast]);
 
   const deleteEvent = useCallback((id: string) => {
-    setEvents(prev => prev.filter(item => item.id !== id));
+    setEvents(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      setDoc(doc(db, 'config', 'events'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/events')
+      );
+      return updated;
+    });
     showToast('Event removed.', 'info');
   }, [showToast]);
 
   const rsvpEvent = useCallback((id: string) => {
-    setEvents(prev => prev.map(item => item.id === id ? { ...item, rsvpCount: item.rsvpCount + 1 } : item));
+    setEvents(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, rsvpCount: item.rsvpCount + 1 } : item);
+      setDoc(doc(db, 'config', 'events'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/events')
+      );
+      return updated;
+    });
     showToast('You have successfully reserved your seat for this service!', 'success');
   }, [showToast]);
 
-  // Submissions
+  // Submissions with Cloud Sync
   const submitBookingRequest = useCallback((req: Omit<BookingRequest, 'id' | 'status' | 'submittedAt'>) => {
     const newReq: BookingRequest = {
       ...req,
@@ -1120,17 +1276,35 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
       status: 'pending',
       submittedAt: new Date().toISOString().split('T')[0]
     };
-    setBookingRequests(prev => [newReq, ...prev]);
+    setBookingRequests(prev => {
+      const updated = [newReq, ...prev];
+      setDoc(doc(db, 'config', 'bookings'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/bookings')
+      );
+      return updated;
+    });
     showToast('Ministration Invitation submitted! The Pastoral Protocol team will contact you shortly.', 'success');
   }, [showToast]);
 
   const updateBookingStatus = useCallback((id: string, status: BookingRequest['status']) => {
-    setBookingRequests(prev => prev.map(b => b.id === id ? { ...b, status } : b));
+    setBookingRequests(prev => {
+      const updated = prev.map(b => b.id === id ? { ...b, status } : b);
+      setDoc(doc(db, 'config', 'bookings'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/bookings')
+      );
+      return updated;
+    });
     showToast(`Booking marked as ${status}.`, 'info');
   }, [showToast]);
 
   const deleteBookingRequest = useCallback((id: string) => {
-    setBookingRequests(prev => prev.filter(b => b.id !== id));
+    setBookingRequests(prev => {
+      const updated = prev.filter(b => b.id !== id);
+      setDoc(doc(db, 'config', 'bookings'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/bookings')
+      );
+      return updated;
+    });
     showToast('Booking inquiry removed.', 'info');
   }, [showToast]);
 
@@ -1140,7 +1314,13 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
       id: `give-${Date.now()}`,
       date: new Date().toISOString().split('T')[0]
     };
-    setGivingRecords(prev => [newRecord, ...prev]);
+    setGivingRecords(prev => {
+      const updated = [newRecord, ...prev];
+      setDoc(doc(db, 'config', 'giving'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/giving')
+      );
+      return updated;
+    });
     showToast('God bless your cheerful giving! Your seed record has been acknowledged.', 'success');
   }, [showToast]);
 
@@ -1151,12 +1331,24 @@ export const MinistryProvider: React.FC<{ children: ReactNode }> = ({ children }
       submittedAt: new Date().toISOString().split('T')[0],
       status: 'Received'
     };
-    setPrayerRequests(prev => [newPrayer, ...prev]);
+    setPrayerRequests(prev => {
+      const updated = [newPrayer, ...prev];
+      setDoc(doc(db, 'config', 'prayers'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/prayers')
+      );
+      return updated;
+    });
     showToast('Your prayer request has been received on the altar of intercession.', 'success');
   }, [showToast]);
 
   const updatePrayerStatus = useCallback((id: string, status: PrayerRequest['status']) => {
-    setPrayerRequests(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+    setPrayerRequests(prev => {
+      const updated = prev.map(p => p.id === id ? { ...p, status } : p);
+      setDoc(doc(db, 'config', 'prayers'), { list: updated }).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, 'config/prayers')
+      );
+      return updated;
+    });
     showToast(`Prayer petition status updated to "${status}".`, 'info');
   }, [showToast]);
 

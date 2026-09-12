@@ -422,33 +422,33 @@ export const HomeBannerManager: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-700 dark:text-slate-300">
-            <div className="p-4 rounded-2xl bg-white/60 dark:bg-slate-900/60 border border-amber-500/20 space-y-2">
+            <div className="p-4 rounded-2xl bg-white/60 dark:bg-slate-900/60 border border-emerald-500/30 space-y-2">
               <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-[10px]">1</span>
-                <span>Local Browser vs Netlify</span>
+                <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-bold flex items-center justify-center text-[10px]">1</span>
+                <span>Real-Time Cloud Synchronization</span>
               </div>
               <p className="leading-relaxed text-slate-600 dark:text-slate-400">
-                When you change banners in this Admin Portal, changes are saved in your browser's <code>localStorage</code>. Netlify builds fresh from GitHub code in <code>src/data/initialData.ts</code>, where initial defaults reside.
+                Firebase Firestore cloud database is connected! Any picture, banner, or title you save in this Admin Portal is published live to the cloud and instantly updates on all visitors' devices around the world.
               </p>
             </div>
 
             <div className="p-4 rounded-2xl bg-white/60 dark:bg-slate-900/60 border border-amber-500/20 space-y-2">
               <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-[10px]">2</span>
-                <span>Image Hotlink Protection</span>
+                <span>Image Link & Upload Optimization</span>
               </div>
               <p className="leading-relaxed text-slate-600 dark:text-slate-400">
-                Certain free image hosts (PostImages, Imgur) block requests coming from Netlify domains unless <code>referrerPolicy="no-referrer"</code> is configured. We have added this attribute and an automatic fallback so your banners will not break.
+                You can upload photos directly from your phone/computer or paste direct URLs (PostImages, Imgur, Google Drive). Images are automatically optimized and served with <code>referrerPolicy="no-referrer"</code>.
               </p>
             </div>
 
             <div className="p-4 rounded-2xl bg-white/60 dark:bg-slate-900/60 border border-amber-500/20 space-y-2">
               <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-[10px]">3</span>
-                <span>Permanent GitHub Sync</span>
+                <span>Multi-Device Persistence</span>
               </div>
               <p className="leading-relaxed text-slate-600 dark:text-slate-400">
-                To make any banner permanent for every visitor on Netlify without needing an Admin login, click <strong>Copy Banner Config for Git</strong> above, and save it in <code>src/data/initialData.ts</code>, or log into Admin on Netlify once.
+                No matter where a member or visitor opens the website, Firestore real-time snapshot listeners immediately fetch your latest admin updates, ensuring your home page banners remain up to date.
               </p>
             </div>
           </div>
